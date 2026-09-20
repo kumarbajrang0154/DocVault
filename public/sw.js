@@ -1,5 +1,5 @@
 // Mood PWA Service Worker Foundation
-const CACHE_NAME = 'mood-app-shell-v1';
+const CACHE_NAME = 'mood-app-shell-v2';
 
 const APP_SHELL_ASSETS = [
   '/',
@@ -31,7 +31,14 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Navigation requests: Network first, fallback to cached app shell
+  const url = new URL(event.request.url);
+
+  // 1. Exclude Next.js build assets and API routes straight to network
+  if (url.pathname.startsWith('/_next/') || url.pathname.startsWith('/api/')) {
+    return;
+  }
+
+  // 2. Navigation requests: Network first, fallback to cached app shell
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => {
@@ -41,10 +48,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static asset requests: Cache first, network fallback
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
-    })
-  );
+  // 3. Keep cache-first ONLY for explicit app-shell assets
+  if (APP_SHELL_ASSETS.includes(url.pathname)) {
+    event.respondWith(
+      caches.match(event.request).then((response) => {
+        return response || fetch(event.request);
+      })
+    );
+    return;
+  }
+
+  // All other requests pass through to the network directly
 });
