@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { getSongs, createSong, updateSong, toggleSongPublish, toggleSongDownload, deleteSong } from '@/app/admin/actions/songs';
+import { getSongs, createSong, updateSong, toggleSongPublish, toggleSongDownload, deleteSong, uploadSongAudio } from '@/app/admin/actions/songs';
 import { isYouTubeUrl } from '@/lib/urlUtils';
 import { getLanguages } from '@/app/admin/actions/languages';
 import { getCategories } from '@/app/admin/actions/categories';
@@ -20,7 +20,9 @@ import {
   XCircle, 
   Download, 
   Globe,
-  ExternalLink
+  ExternalLink,
+  Upload,
+  Loader2
 } from 'lucide-react';
 
 interface SongItem {
@@ -88,6 +90,43 @@ export default function AdminSongsPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modalError, setModalError] = useState('');
+  const [uploadingField, setUploadingField] = useState<'streamUrl' | 'downloadUrl' | null>(null);
+  const [uploadError, setUploadError] = useState<{ field: 'streamUrl' | 'downloadUrl'; message: string } | null>(null);
+
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    targetField: 'streamUrl' | 'downloadUrl'
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset input so same file selection triggers change event if needed
+    e.target.value = '';
+
+    setUploadingField(targetField);
+    setUploadError(null);
+    setModalError('');
+
+    try {
+      const payload = new FormData();
+      payload.append('file', file);
+      payload.append('title', formData.title || 'audio-track');
+
+      const result = await uploadSongAudio(payload);
+
+      setFormData((prev) => ({
+        ...prev,
+        [targetField]: result.url,
+      }));
+
+      setSuccessMessage(`Audio uploaded to R2 successfully: ${file.name}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Audio upload failed.';
+      setUploadError({ field: targetField, message });
+    } finally {
+      setUploadingField(null);
+    }
+  };
 
   // Delete state
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -190,6 +229,8 @@ export default function AdminSongsPage() {
     });
     setErrorMessage('');
     setModalError('');
+    setUploadError(null);
+    setUploadingField(null);
     setIsModalOpen(true);
   };
 
@@ -212,6 +253,8 @@ export default function AdminSongsPage() {
     });
     setErrorMessage('');
     setModalError('');
+    setUploadError(null);
+    setUploadingField(null);
     setIsModalOpen(true);
   };
 
@@ -656,6 +699,36 @@ export default function AdminSongsPage() {
                   : 'border-white/10 bg-zinc-950 focus:border-emerald-500'
               }`}
             />
+
+            <div className="mt-2 flex items-center gap-3">
+              <label className="relative cursor-pointer inline-flex items-center gap-1.5 rounded-xl bg-emerald-950/50 hover:bg-emerald-900/50 px-3 py-1.5 text-xs font-semibold text-emerald-300 border border-emerald-500/30 transition-colors">
+                {uploadingField === 'streamUrl' ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5 text-emerald-400" />
+                )}
+                <span>{uploadingField === 'streamUrl' ? 'Uploading to R2...' : 'Upload File to R2'}</span>
+                <input
+                  type="file"
+                  accept="audio/mpeg,audio/mp4,audio/wav,audio/x-m4a,audio/mp3,audio/m4a,.mp3,.m4a,.wav"
+                  disabled={uploadingField === 'streamUrl'}
+                  onChange={(e) => handleFileUpload(e, 'streamUrl')}
+                  className="sr-only"
+                />
+              </label>
+              {uploadingField === 'streamUrl' && (
+                <span className="text-[11px] font-medium text-emerald-400 animate-pulse flex items-center gap-1">
+                  Uploading audio resource to Cloudflare R2...
+                </span>
+              )}
+            </div>
+
+            {uploadError?.field === 'streamUrl' && (
+              <p className="text-[11px] font-semibold text-rose-400 mt-1.5">
+                ⚠️ Upload error: {uploadError.message}
+              </p>
+            )}
+
             {isYouTubeUrl(formData.streamUrl) || modalError.includes('Authorized Stream URL') ? (
               <p className="text-[11px] font-semibold text-rose-400 mt-1">
                 Authorized Stream URL cannot be a YouTube link. Paste a direct audio file URL (e.g. ending in .mp3/.m4a) from your own authorized storage.
@@ -681,6 +754,36 @@ export default function AdminSongsPage() {
                   : 'border-white/10 bg-zinc-950 focus:border-purple-500'
               }`}
             />
+
+            <div className="mt-2 flex items-center gap-3">
+              <label className="relative cursor-pointer inline-flex items-center gap-1.5 rounded-xl bg-purple-950/50 hover:bg-purple-900/50 px-3 py-1.5 text-xs font-semibold text-purple-300 border border-purple-500/30 transition-colors">
+                {uploadingField === 'downloadUrl' ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5 text-purple-400" />
+                )}
+                <span>{uploadingField === 'downloadUrl' ? 'Uploading to R2...' : 'Upload File to R2'}</span>
+                <input
+                  type="file"
+                  accept="audio/mpeg,audio/mp4,audio/wav,audio/x-m4a,audio/mp3,audio/m4a,.mp3,.m4a,.wav"
+                  disabled={uploadingField === 'downloadUrl'}
+                  onChange={(e) => handleFileUpload(e, 'downloadUrl')}
+                  className="sr-only"
+                />
+              </label>
+              {uploadingField === 'downloadUrl' && (
+                <span className="text-[11px] font-medium text-purple-400 animate-pulse flex items-center gap-1">
+                  Uploading download file to Cloudflare R2...
+                </span>
+              )}
+            </div>
+
+            {uploadError?.field === 'downloadUrl' && (
+              <p className="text-[11px] font-semibold text-rose-400 mt-1.5">
+                ⚠️ Upload error: {uploadError.message}
+              </p>
+            )}
+
             {isYouTubeUrl(formData.downloadUrl) || modalError.includes('Authorized Download URL') ? (
               <p className="text-[11px] font-semibold text-rose-400 mt-1">
                 Authorized Download URL cannot be a YouTube link. Paste a direct audio file URL (e.g. ending in .mp3/.m4a) from your own authorized storage.

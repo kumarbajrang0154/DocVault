@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { requireAdmin } from '@/lib/adminAuth';
 import { logAdminAction } from '@/lib/activityLog';
 import { isYouTubeUrl } from '@/lib/urlUtils';
+import { uploadAudioFile } from '@/lib/r2';
 
 export interface GetSongsParams {
   search?: string;
@@ -253,4 +254,25 @@ export async function deleteSong(id: string) {
 
   await logAdminAction('SONG_DELETED', 'Song', id, { title: deleted.title });
   return deleted;
+}
+
+export async function uploadSongAudio(formData: FormData) {
+  await requireAdmin();
+
+  const file = formData.get('file') as File | null;
+  const songTitle = (formData.get('title') as string | null) || 'audio-track';
+
+  if (!file || typeof file === 'string') {
+    throw new Error('No valid audio file attached for upload.');
+  }
+
+  const publicUrl = await uploadAudioFile(file, songTitle);
+
+  await logAdminAction('AUDIO_UPLOADED', 'Song', 'r2-storage', {
+    filename: file.name,
+    size: file.size,
+    publicUrl,
+  });
+
+  return { url: publicUrl };
 }
