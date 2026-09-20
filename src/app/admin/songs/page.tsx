@@ -616,7 +616,7 @@ export default function AdminSongsPage() {
 
           {/* Reference Source URL */}
           <div>
-            <label className="block text-xs font-semibold text-cyan-400 mb-1">Source / Reference URL</label>
+            <label className="block text-xs font-semibold text-cyan-400 mb-1">Source / Reference</label>
             <input
               type="url"
               placeholder="https://www.youtube.com/watch?v=..."
@@ -631,7 +631,7 @@ export default function AdminSongsPage() {
 
           {/* Authorized Stream URL */}
           <div>
-            <label className="block text-xs font-semibold text-emerald-400 mb-1">Authorized Stream URL</label>
+            <label className="block text-xs font-semibold text-emerald-400 mb-1">Audio Playback (Authorized Stream URL)</label>
             <input
               type="url"
               placeholder="https://cdn.example.com/audio/song.mp3"
@@ -646,7 +646,7 @@ export default function AdminSongsPage() {
 
           {/* Authorized Download URL */}
           <div>
-            <label className="block text-xs font-semibold text-purple-400 mb-1">Authorized Download URL</label>
+            <label className="block text-xs font-semibold text-purple-400 mb-1">Download (Authorized Download URL)</label>
             <input
               type="url"
               placeholder="https://cdn.example.com/audio/song.mp3"
