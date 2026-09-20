@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { getSongs, createSong, updateSong, toggleSongPublish, toggleSongDownload, deleteSong, isYouTubeUrl } from '@/app/admin/actions/songs';
+import { getSongs, createSong, updateSong, toggleSongPublish, toggleSongDownload, deleteSong } from '@/app/admin/actions/songs';
+import { isYouTubeUrl } from '@/lib/urlUtils';
 import { getLanguages } from '@/app/admin/actions/languages';
 import { getCategories } from '@/app/admin/actions/categories';
 import { getArtists } from '@/app/admin/actions/artists';

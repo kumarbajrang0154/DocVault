@@ -3,6 +3,7 @@
 import { db } from '@/lib/db';
 import { requireAdmin } from '@/lib/adminAuth';
 import { logAdminAction } from '@/lib/activityLog';
+import { isYouTubeUrl } from '@/lib/urlUtils';
 
 export interface GetSongsParams {
   search?: string;
@@ -91,12 +92,6 @@ export interface SongFormData {
   isDownloadable?: boolean;
   isPublished?: boolean;
   categoryIds: string[];
-}
-
-export function isYouTubeUrl(url?: string | null): boolean {
-  if (!url) return false;
-  const lower = url.trim().toLowerCase();
-  return lower.includes('youtube.com') || lower.includes('youtu.be') || lower.includes('m.youtube.com');
 }
 
 function validateOptionalUrl(

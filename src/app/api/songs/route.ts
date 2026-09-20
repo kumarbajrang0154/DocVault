@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMatchingSongs } from '@/lib/publicData';
+import { isYouTubeUrl } from '@/lib/urlUtils';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -9,8 +10,6 @@ export async function GET(request: NextRequest) {
   const rawSongs = await getMatchingSongs(language, mood);
 
   const songs = rawSongs.map((song) => {
-    const isYouTubeUrl = (url?: string | null) =>
-      Boolean(url && (url.includes('youtube.com') || url.includes('youtu.be') || url.includes('m.youtube.com')));
 
     // Resolve sourceUrl: if explicit sourceUrl, use it; else if audioUrl is YouTube, use audioUrl
     const sourceUrl =
