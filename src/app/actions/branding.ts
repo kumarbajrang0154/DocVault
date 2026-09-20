@@ -81,9 +81,9 @@ export async function updateSiteBrandingAction(data: {
   welcomeMessage?: string | null;
   footerText?: string | null;
 }) {
-  await requireAdmin();
-
   try {
+    await requireAdmin();
+
     const updated = await db.siteBranding.upsert({
       where: { id: 'singleton' },
       update: {
@@ -129,22 +129,22 @@ export async function updateSiteBrandingAction(data: {
 }
 
 export async function uploadLogoAction(formData: FormData) {
-  await requireAdmin();
-
-  const isConfigured = configureCloudinary();
-  if (!isConfigured) {
-    return {
-      success: false,
-      error: 'Cloudinary environment variables (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET) are not configured.',
-    };
-  }
-
-  const file = formData.get('file') as File | null;
-  if (!file || file.size === 0) {
-    return { success: false, error: 'Please select a logo image to upload.' };
-  }
-
   try {
+    await requireAdmin();
+
+    const isConfigured = configureCloudinary();
+    if (!isConfigured) {
+      return {
+        success: false,
+        error: 'Cloudinary environment variables (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET) are not configured.',
+      };
+    }
+
+    const file = formData.get('file') as File | null;
+    if (!file || file.size === 0) {
+      return { success: false, error: 'Please select a logo image to upload.' };
+    }
+
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 

@@ -6,10 +6,10 @@ import { requireAdmin } from '@/lib/authGuard';
 import { logActivity } from '@/lib/activityLog';
 
 export async function approveUserAction(userId: string) {
-  const session = await requireAdmin();
-  const adminEmail = session.user.email || 'admin';
-
   try {
+    const session = await requireAdmin();
+    const adminEmail = session.user.email || 'admin';
+
     const updated = await db.user.update({
       where: { id: userId },
       data: {
@@ -33,10 +33,10 @@ export async function approveUserAction(userId: string) {
 }
 
 export async function rejectUserAction(userId: string) {
-  const session = await requireAdmin();
-  const adminEmail = session.user.email || 'admin';
-
   try {
+    const session = await requireAdmin();
+    const adminEmail = session.user.email || 'admin';
+
     const updated = await db.user.update({
       where: { id: userId },
       data: {
@@ -60,10 +60,10 @@ export async function rejectUserAction(userId: string) {
 }
 
 export async function revokeUserAction(userId: string) {
-  const session = await requireAdmin();
-  const adminEmail = session.user.email || 'admin';
-
   try {
+    const session = await requireAdmin();
+    const adminEmail = session.user.email || 'admin';
+
     const updated = await db.user.update({
       where: { id: userId },
       data: {
@@ -87,10 +87,10 @@ export async function revokeUserAction(userId: string) {
 }
 
 export async function reconsiderUserAction(userId: string) {
-  const session = await requireAdmin();
-  const adminEmail = session.user.email || 'admin';
-
   try {
+    const session = await requireAdmin();
+    const adminEmail = session.user.email || 'admin';
+
     const updated = await db.user.update({
       where: { id: userId },
       data: {
@@ -114,8 +114,14 @@ export async function reconsiderUserAction(userId: string) {
 }
 
 export async function getUsersListAction() {
-  await requireAdmin();
-  return await db.user.findMany({
-    orderBy: { requestedAt: 'desc' },
-  });
+  try {
+    await requireAdmin();
+    const users = await db.user.findMany({
+      orderBy: { requestedAt: 'desc' },
+    });
+    return { success: true, users };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch users list';
+    return { success: false, error: message, users: [] };
+  }
 }
