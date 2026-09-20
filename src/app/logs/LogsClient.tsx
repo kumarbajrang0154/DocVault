@@ -2,7 +2,11 @@
 
 import React, { useState } from 'react';
 import { History, Shield, Calendar, Eye, Search, Filter } from 'lucide-react';
-import { LogDetailModal, ActivityLogRecord } from '@/components/logs/LogDetailModal';
+import {
+  LogDetailModal,
+  ActivityLogRecord,
+  formatLogDetailsSummary,
+} from '@/components/logs/LogDetailModal';
 
 interface LogsClientProps {
   logs: ActivityLogRecord[];
@@ -131,7 +135,7 @@ export function LogsClient({ logs }: LogsClientProps) {
                         </span>
                       </td>
                       <td className="p-4 text-zinc-400 text-[11px] max-w-xs truncate">
-                        {log.details || '—'}
+                        {formatLogDetailsSummary(log.details)}
                       </td>
                       <td className="p-4 text-right">
                         <button
