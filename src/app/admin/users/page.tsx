@@ -4,48 +4,56 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
   Users,
-  UserPlus,
-  Trash2,
   CheckCircle2,
+  XCircle,
   Clock,
+  RotateCcw,
   ShieldCheck,
   AlertCircle,
   Loader2,
   ArrowLeft,
   Search,
+  UserCheck,
 } from 'lucide-react';
 import {
-  getAuthorizedEmailsAction,
-  addAuthorizedEmailAction,
-  revokeAuthorizedEmailAction,
+  getUsersListAction,
+  approveUserAction,
+  rejectUserAction,
+  revokeUserAction,
+  reconsiderUserAction,
 } from '@/app/actions/users';
 
-interface AuthorizedEntry {
+interface UserRecord {
   id: string;
   email: string;
-  addedByAdmin: string;
-  addedAt: string | Date;
-  hasLoggedIn: boolean;
+  name: string | null;
+  image: string | null;
+  isAdmin: boolean;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  requestedAt: string | Date;
+  reviewedAt: string | Date | null;
+  reviewedBy: string | null;
 }
 
+type TabType = 'pending' | 'approved' | 'rejected';
+
 export default function AdminUsersPage() {
-  const [entries, setEntries] = useState<AuthorizedEntry[]>([]);
-  const [newEmail, setNewEmail] = useState('');
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [activeTab, setActiveTab] = useState<TabType>('pending');
   const [searchQuery, setSearchQuery] = useState('');
 
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [actionUserId, setActionUserId] = useState<string | null>(null);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
+  const loadUsers = useCallback(async () => {
     try {
-      const data = await getAuthorizedEmailsAction();
-      setEntries(data);
+      const data = await getUsersListAction();
+      setUsers(data as unknown as UserRecord[]);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Access denied or failed to load data.';
+      const msg = err instanceof Error ? err.message : 'Failed to load user access requests.';
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);
@@ -53,61 +61,106 @@ export default function AdminUsersPage() {
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadUsers();
+  }, [loadUsers]);
 
-  const handleAddEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newEmail.trim()) return;
-
-    setIsSubmitting(true);
+  const handleApprove = async (userId: string, email: string) => {
+    setActionUserId(userId);
     setErrorMessage(null);
     setSuccessMessage(null);
-
     try {
-      const res = await addAuthorizedEmailAction(newEmail);
+      const res = await approveUserAction(userId);
       if (res.success) {
-        setSuccessMessage(`Successfully added ${newEmail} to the DocVault allowlist.`);
-        setNewEmail('');
-        await loadData();
+        setSuccessMessage(`Approved access request for ${email}.`);
+        await loadUsers();
       } else {
-        setErrorMessage(res.error || 'Failed to authorize email.');
+        setErrorMessage(res.error || 'Failed to approve user.');
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error adding email.';
+      const msg = err instanceof Error ? err.message : 'Action failed.';
       setErrorMessage(msg);
     } finally {
-      setIsSubmitting(false);
+      setActionUserId(null);
     }
   };
 
-  const handleRevoke = async (id: string, email: string) => {
-    if (!confirm(`Are you sure you want to revoke access for ${email}?`)) {
-      return;
-    }
-
-    setRevokingId(id);
+  const handleReject = async (userId: string, email: string) => {
+    setActionUserId(userId);
     setErrorMessage(null);
     setSuccessMessage(null);
-
     try {
-      const res = await revokeAuthorizedEmailAction(id);
+      const res = await rejectUserAction(userId);
+      if (res.success) {
+        setSuccessMessage(`Declined access request for ${email}.`);
+        await loadUsers();
+      } else {
+        setErrorMessage(res.error || 'Failed to reject user.');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Action failed.';
+      setErrorMessage(msg);
+    } finally {
+      setActionUserId(null);
+    }
+  };
+
+  const handleRevoke = async (userId: string, email: string) => {
+    if (!confirm(`Are you sure you want to revoke access for ${email}?`)) return;
+
+    setActionUserId(userId);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const res = await revokeUserAction(userId);
       if (res.success) {
         setSuccessMessage(`Revoked access for ${email}.`);
-        await loadData();
+        await loadUsers();
       } else {
-        setErrorMessage(res.error || 'Failed to revoke email.');
+        setErrorMessage(res.error || 'Failed to revoke user.');
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error revoking email.';
+      const msg = err instanceof Error ? err.message : 'Action failed.';
       setErrorMessage(msg);
     } finally {
-      setRevokingId(null);
+      setActionUserId(null);
     }
   };
 
-  const filteredEntries = entries.filter((e) =>
-    e.email.toLowerCase().includes(searchQuery.toLowerCase().trim())
+  const handleReconsider = async (userId: string, email: string) => {
+    setActionUserId(userId);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const res = await reconsiderUserAction(userId);
+      if (res.success) {
+        setSuccessMessage(`Moved ${email} back to Pending Requests for review.`);
+        await loadUsers();
+      } else {
+        setErrorMessage(res.error || 'Failed to reconsider user.');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Action failed.';
+      setErrorMessage(msg);
+    } finally {
+      setActionUserId(null);
+    }
+  };
+
+  const pendingUsers = users.filter((u) => u.status === 'PENDING');
+  const approvedUsers = users.filter((u) => u.status === 'APPROVED');
+  const rejectedUsers = users.filter((u) => u.status === 'REJECTED');
+
+  const currentList =
+    activeTab === 'pending'
+      ? pendingUsers
+      : activeTab === 'approved'
+      ? approvedUsers
+      : rejectedUsers;
+
+  const filteredList = currentList.filter(
+    (u) =>
+      u.email.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+      (u.name && u.name.toLowerCase().includes(searchQuery.toLowerCase().trim()))
   );
 
   return (
@@ -124,17 +177,17 @@ export default function AdminUsersPage() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
               <Users className="h-7 w-7 text-blue-400" />
-              User Access Control
+              Access Request Portal
             </h1>
             <p className="text-sm text-zinc-400 mt-1">
-              Manage authorized email allowlist for Google OAuth sign-in.
+              Review, approve, or reject user access requests for DocVault.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-300">
           <ShieldCheck className="h-3.5 w-3.5 text-blue-400" />
-          <span>Admin Portal Only</span>
+          <span>Admin Controls</span>
         </div>
       </div>
 
@@ -152,126 +205,179 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      {/* Add Email Allowlist Form */}
-      <div className="rounded-3xl border border-white/10 bg-zinc-900/60 p-6 shadow-xl space-y-4">
-        <h2 className="text-base font-bold text-white flex items-center gap-2">
-          <UserPlus className="h-5 w-5 text-emerald-400" />
-          Authorize New User Email
-        </h2>
-        <p className="text-xs text-zinc-400">
-          Adding an email to the allowlist permits that Google account to sign in to DocVault.
-        </p>
-
-        <form onSubmit={handleAddEmail} className="flex flex-col sm:flex-row gap-3 pt-2">
-          <input
-            type="email"
-            value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
-            placeholder="e.g. family.member@gmail.com"
-            required
-            className="flex-1 rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-xs text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-          />
+      {/* Tabs & Search Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Tabs */}
+        <div className="flex items-center gap-1.5 rounded-2xl border border-white/10 bg-zinc-900/80 p-1.5">
           <button
-            type="submit"
-            disabled={isSubmitting}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 text-xs font-bold text-white shadow-lg shadow-blue-600/25 hover:bg-blue-500 disabled:opacity-50 cursor-pointer whitespace-nowrap"
+            type="button"
+            onClick={() => setActiveTab('pending')}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'pending'
+                ? 'bg-amber-500 text-zinc-950 shadow-md'
+                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+            }`}
           >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Authorizing...</span>
-              </>
-            ) : (
-              <>
-                <UserPlus className="h-4 w-4" />
-                <span>Authorize Account</span>
-              </>
-            )}
+            <Clock className="h-3.5 w-3.5" />
+            <span>Pending ({pendingUsers.length})</span>
           </button>
-        </form>
-      </div>
 
-      {/* Allowlist Table */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <span>Authorized Accounts</span>
-            <span className="rounded-full bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 text-xs font-semibold text-blue-400">
-              {entries.length}
-            </span>
-          </h2>
+          <button
+            type="button"
+            onClick={() => setActiveTab('approved')}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'approved'
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <UserCheck className="h-3.5 w-3.5" />
+            <span>Approved ({approvedUsers.length})</span>
+          </button>
 
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search allowlist..."
-              className="w-full rounded-xl border border-white/10 bg-zinc-900/80 pl-9 pr-3 py-2 text-xs text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab('rejected')}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'rejected'
+                ? 'bg-rose-600 text-white shadow-md'
+                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <XCircle className="h-3.5 w-3.5" />
+            <span>Rejected ({rejectedUsers.length})</span>
+          </button>
         </div>
 
-        {isLoading ? (
-          <div className="flex h-48 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-          </div>
-        ) : filteredEntries.length === 0 ? (
-          <div className="rounded-2xl border border-white/5 bg-zinc-900/40 p-8 text-center text-xs text-zinc-400">
-            No authorized email entries found.
-          </div>
-        ) : (
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/60 shadow-xl">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-white/10 bg-white/5 text-zinc-400 font-semibold uppercase tracking-wider text-[10px]">
-                  <tr>
-                    <th className="p-4">Email Address</th>
-                    <th className="p-4">Login Status</th>
-                    <th className="p-4">Authorized By</th>
-                    <th className="p-4">Date Added</th>
-                    <th className="p-4 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-zinc-300">
-                  {filteredEntries.map((entry) => (
-                    <tr key={entry.id} className="hover:bg-white/5 transition-colors">
-                      <td className="p-4 font-semibold text-white">{entry.email}</td>
-                      <td className="p-4">
-                        {entry.hasLoggedIn ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-[10px] font-bold text-emerald-400">
-                            <CheckCircle2 className="h-3 w-3" /> Signed Up / Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-[10px] font-medium text-amber-400">
-                            <Clock className="h-3 w-3" /> Pending First Login
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-4 text-zinc-400 text-[11px]">{entry.addedByAdmin}</td>
-                      <td className="p-4 text-zinc-400 text-[11px]">
-                        {new Date(entry.addedAt).toLocaleDateString()}
-                      </td>
-                      <td className="p-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleRevoke(entry.id, entry.email)}
-                          disabled={revokingId === entry.id}
-                          className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 text-xs font-semibold text-rose-400 hover:bg-rose-500 hover:text-white disabled:opacity-50 transition-all cursor-pointer"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          <span>Revoke Access</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+        {/* Search */}
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search users..."
+            className="w-full rounded-xl border border-white/10 bg-zinc-900/80 pl-9 pr-3 py-2 text-xs text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+          />
+        </div>
       </div>
+
+      {/* Users Table */}
+      {isLoading ? (
+        <div className="flex h-48 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        </div>
+      ) : filteredList.length === 0 ? (
+        <div className="rounded-2xl border border-white/5 bg-zinc-900/40 p-12 text-center text-xs text-zinc-400 space-y-1">
+          <p className="font-semibold text-zinc-300">No {activeTab} user requests found.</p>
+          <p className="text-zinc-500">New sign-ups will automatically appear in Pending Requests.</p>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/60 shadow-xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-white/10 bg-white/5 text-zinc-400 font-semibold uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th className="p-4">User</th>
+                  <th className="p-4">Email</th>
+                  <th className="p-4">Requested At</th>
+                  <th className="p-4">Reviewed Info</th>
+                  <th className="p-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 text-zinc-300">
+                {filteredList.map((user) => (
+                  <tr key={user.id} className="hover:bg-white/5 transition-colors">
+                    <td className="p-4 font-semibold text-white flex items-center gap-2">
+                      {user.image ? (
+                        // eslint-disable-next-html-element-suppression
+                        <img
+                          src={user.image}
+                          alt={user.name || 'User'}
+                          className="h-7 w-7 rounded-full border border-white/10 object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">
+                          {user.email.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span>{user.name || 'Anonymous User'}</span>
+                      {user.isAdmin && (
+                        <span className="rounded-full bg-amber-500/10 border border-amber-500/20 px-2 py-0.2 text-[9px] font-bold text-amber-400">
+                          ADMIN
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-4 font-mono text-zinc-300">{user.email}</td>
+                    <td className="p-4 text-zinc-400 text-[11px]">
+                      {new Date(user.requestedAt).toLocaleString()}
+                    </td>
+                    <td className="p-4 text-zinc-400 text-[11px]">
+                      {user.reviewedAt ? (
+                        <span>
+                          {new Date(user.reviewedAt).toLocaleDateString()} by {user.reviewedBy || 'admin'}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-600">Pending Review</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        {activeTab === 'pending' && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleApprove(user.id, user.email)}
+                              disabled={actionUserId === user.id}
+                              className="inline-flex h-8 items-center justify-center gap-1 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50 transition-all cursor-pointer"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              <span>Approve</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleReject(user.id, user.email)}
+                              disabled={actionUserId === user.id}
+                              className="inline-flex h-8 items-center justify-center gap-1 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 text-xs font-semibold text-rose-400 hover:bg-rose-500 hover:text-white disabled:opacity-50 transition-all cursor-pointer"
+                            >
+                              <XCircle className="h-3.5 w-3.5" />
+                              <span>Reject</span>
+                            </button>
+                          </>
+                        )}
+
+                        {activeTab === 'approved' && (
+                          <button
+                            type="button"
+                            onClick={() => handleRevoke(user.id, user.email)}
+                            disabled={actionUserId === user.id || user.isAdmin}
+                            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 text-xs font-semibold text-rose-400 hover:bg-rose-500 hover:text-white disabled:opacity-50 transition-all cursor-pointer"
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            <span>Revoke Access</span>
+                          </button>
+                        )}
+
+                        {activeTab === 'rejected' && (
+                          <button
+                            type="button"
+                            onClick={() => handleReconsider(user.id, user.email)}
+                            disabled={actionUserId === user.id}
+                            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 text-xs font-semibold text-amber-400 hover:bg-amber-500 hover:text-zinc-950 disabled:opacity-50 transition-all cursor-pointer"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            <span>Reconsider</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

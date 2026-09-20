@@ -4,11 +4,14 @@ import { db } from '@/lib/db';
 
 export const ADMIN_EMAIL = 'kumarbajrang325@gmail.com';
 
+export type UserStatusType = 'PENDING' | 'APPROVED' | 'REJECTED';
+
 declare module 'next-auth' {
   interface Session {
     user: {
       id: string;
       isAdmin: boolean;
+      status: UserStatusType;
     } & DefaultSession['user'];
   }
 }
@@ -30,67 +33,33 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const email = user.email.toLowerCase();
 
       try {
-        // a. If User record already exists -> allow sign-in
         const existingUser = await db.user.findUnique({
           where: { email },
         });
+
         if (existingUser) {
           return true;
         }
 
-        // b. Check if email exists in AuthorizedEmail allowlist
-        const authorizedEntry = await db.authorizedEmail.findUnique({
-          where: { email },
+        // Hardcoded primary admin bypasses PENDING state
+        const isAdmin = email === ADMIN_EMAIL.toLowerCase();
+
+        await db.user.create({
+          data: {
+            email,
+            name: user.name || null,
+            image: user.image || null,
+            isAdmin,
+            status: isAdmin ? 'APPROVED' : 'PENDING',
+            requestedAt: new Date(),
+            reviewedAt: isAdmin ? new Date() : null,
+            reviewedBy: isAdmin ? 'system' : null,
+          },
         });
 
-        if (authorizedEntry) {
-          const isAdmin = email === ADMIN_EMAIL.toLowerCase();
-          await db.user.create({
-            data: {
-              email,
-              name: user.name || null,
-              image: user.image || null,
-              isAdmin,
-            },
-          });
-
-          await db.authorizedEmail.update({
-            where: { email },
-            data: { hasLoggedIn: true },
-          });
-
-          return true;
-        }
-
-        // c. Hardcoded primary admin fallback
-        if (email === ADMIN_EMAIL.toLowerCase()) {
-          await db.user.create({
-            data: {
-              email,
-              name: user.name || null,
-              image: user.image || null,
-              isAdmin: true,
-            },
-          });
-
-          await db.authorizedEmail.upsert({
-            where: { email },
-            update: { hasLoggedIn: true },
-            create: {
-              email,
-              addedByAdmin: 'system',
-              hasLoggedIn: true,
-            },
-          });
-
-          return true;
-        }
-
-        // d. Email not authorized -> deny sign-in
-        console.warn(`[DocVault OAuth SignIn Warning] Unauthorized email attempt: ${email}`);
-        return false;
+        return true;
       } catch (err) {
-        console.error('[DocVault OAuth SignIn Error] Detailed database error during authorization check:', {
+        console.error('[DocVault OAuth SignIn Error] Detailed database error during user creation/check:', {
           email,
           message: err instanceof Error ? err.message : String(err),
           stack: err instanceof Error ? err.stack : undefined,
@@ -110,6 +79,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (dbUser) {
             session.user.id = dbUser.id;
             session.user.isAdmin = dbUser.isAdmin;
+            session.user.status = dbUser.status as UserStatusType;
           }
         } catch (err) {
           console.error('[DocVault Session Error] Detailed database error fetching user profile:', {

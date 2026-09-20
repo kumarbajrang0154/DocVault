@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Lock,
   Users,
+  Palette,
 } from 'lucide-react';
 
 interface SidebarItem {
@@ -59,9 +60,14 @@ export function Sidebar({ isOpen = false, onClose, isAdmin = false }: SidebarPro
 
   if (isAdmin) {
     NAV_ITEMS.push({
-      title: 'Admin Users Allowlist',
+      title: 'User Approvals',
       href: '/admin/users',
       icon: <Users className="h-4 w-4 text-amber-400" />,
+    });
+    NAV_ITEMS.push({
+      title: 'Branding Portal',
+      href: '/admin/branding',
+      icon: <Palette className="h-4 w-4 text-pink-400" />,
     });
   }
 
