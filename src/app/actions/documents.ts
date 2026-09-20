@@ -198,10 +198,10 @@ export async function deleteDocumentAction(id: string) {
 }
 
 export async function updateUserSettingsAction(reminderThresholds: number[]) {
-  const session = await requireAuth();
-  const userId = session.user.id;
-
   try {
+    const session = await requireAuth();
+    const userId = session.user.id;
+
     const settings = await db.userSettings.upsert({
       where: { userId },
       update: { reminderThresholds },
@@ -224,11 +224,21 @@ export async function updateUserSettingsAction(reminderThresholds: number[]) {
 }
 
 export async function getUserSettingsAction() {
-  const session = await requireAuth();
-  const userId = session.user.id;
+  try {
+    const session = await requireAuth();
+    const userId = session.user.id;
 
-  const settings = await db.userSettings.findUnique({ where: { userId } });
-  return {
-    reminderThresholds: settings?.reminderThresholds || [30, 60, 90],
-  };
+    const settings = await db.userSettings.findUnique({ where: { userId } });
+    return {
+      success: true,
+      reminderThresholds: settings?.reminderThresholds || [30, 60, 90],
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch settings';
+    return {
+      success: false,
+      error: message,
+      reminderThresholds: [30, 60, 90],
+    };
+  }
 }
