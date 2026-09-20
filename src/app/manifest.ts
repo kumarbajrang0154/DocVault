@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Mood',
-    short_name: 'Mood',
-    description: 'Discover music based on your language and mood. Feel the music.',
+    name: 'DocVault',
+    short_name: 'DocVault',
+    description: 'Secure personal document manager with server-side encryption and expiry reminders.',
     start_url: '/',
     display: 'standalone',
     background_color: '#09090b',

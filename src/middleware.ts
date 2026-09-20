@@ -3,23 +3,23 @@ import { NextResponse } from 'next/server';
 
 export default auth((req) => {
   const { nextUrl } = req;
-  const isAuthenticated = !!req.auth?.user;
-  const isAuthorizedAdmin = 
-    req.auth?.user?.email?.toLowerCase() === 'kumarbajrang325@gmail.com';
+  const isAuthenticated = !!req.auth?.user?.id;
+  const isAdmin = !!req.auth?.user?.isAdmin;
 
+  const isProtectedApiRoute = nextUrl.pathname.startsWith('/api/documents');
   const isAdminApiRoute = nextUrl.pathname.startsWith('/api/admin');
 
-  // Protect /api/admin/* endpoints
-  if (isAdminApiRoute) {
-    if (!isAuthenticated || !isAuthorizedAdmin) {
-      return NextResponse.json({ error: 'Unauthorized access' }, { status: 403 });
-    }
+  if (isProtectedApiRoute && !isAuthenticated) {
+    return NextResponse.json({ error: 'Unauthorized access' }, { status: 401 });
   }
 
-  // Allow access to /admin page handler to render login/access-denied/dashboard based on server state
+  if (isAdminApiRoute && (!isAuthenticated || !isAdmin)) {
+    return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+  }
+
   return NextResponse.next();
 });
 
 export const config = {
-  matcher: ['/admin/:path*', '/api/admin/:path*'],
+  matcher: ['/api/documents/:path*', '/api/admin/:path*'],
 };

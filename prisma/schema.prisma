@@ -1,4 +1,4 @@
-// Prisma Schema for Mood Platform
+// Prisma Schema for Multi-User DocVault
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,197 +8,66 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Language {
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String?
+  image        String?
+  isAdmin      Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  documents    Document[]
+  userSettings UserSettings?
+  activityLogs ActivityLog[]
+}
+
+model AuthorizedEmail {
   id           String   @id @default(cuid())
-  name         String   @unique
-  code         String   @unique
-  isActive     Boolean  @default(true)
-  displayOrder Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  songs          Song[]
-  discoveryItems AIDiscoveryItem[]
+  email        String   @unique
+  addedByAdmin String
+  addedAt      DateTime @default(now())
+  hasLoggedIn  Boolean  @default(false)
 }
 
-model Category {
-  id           String   @id @default(cuid())
-  name         String   @unique
-  slug         String   @unique
-  description  String?
-  icon         String?
-  isActive     Boolean  @default(true)
-  displayOrder Int      @default(0)
-  themeId      String?
-  theme        Theme?   @relation(fields: [themeId], references: [id], onDelete: SetNull)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  songCategories SongCategory[]
-  discoveryItems AIDiscoveryItem[]
+model Document {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String
+  category     String
+  tags         String[]
+  notes        String?
+  fileKey      String    // Cloudinary public_id, NOT a public URL
+  fileType     String
+  expiryDate   DateTime?
+  reminderSent Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
-model Artist {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  imageUrl    String?
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  songs  Song[]
-  albums Album[]
+model UserSettings {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reminderThresholds Int[]    @default([30, 60, 90])
+  updatedAt          DateTime @updatedAt
 }
 
-model Album {
-  id            String   @id @default(cuid())
-  title         String
-  artistId      String
-  artist        Artist   @relation(fields: [artistId], references: [id], onDelete: Restrict)
-  coverImageUrl String?
-  releaseDate   String?
-  description   String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  songs Song[]
-}
-
-model Song {
-  id             String   @id @default(cuid())
-  title          String
-  artistId       String
-  artist         Artist   @relation(fields: [artistId], references: [id], onDelete: Restrict)
-  albumId        String?
-  album          Album?   @relation(fields: [albumId], references: [id], onDelete: SetNull)
-  languageId     String
-  language       Language @relation(fields: [languageId], references: [id], onDelete: Restrict)
-  sourceUrl      String?
-  streamUrl      String?
-  downloadUrl    String?
-  audioUrl       String?
-  coverImageUrl  String?
-  duration       Int      @default(0)
-  description    String?
-  isDownloadable Boolean  @default(false)
-  isPublished    Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  categories    SongCategory[]
-  playlistSongs PlaylistSong[]
-}
-
-model SongCategory {
+model ReminderLog {
   id         String   @id @default(cuid())
-  songId     String
-  song       Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
-  categoryId String
-  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
-
-  @@unique([songId, categoryId])
+  documentId String
+  sentAt     DateTime @default(now())
+  daysBefore Int
 }
 
-model Playlist {
-  id            String   @id @default(cuid())
-  title         String
-  slug          String   @unique
-  description   String?
-  coverImageUrl String?
-  isPublished   Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  playlistSongs PlaylistSong[]
-}
-
-model PlaylistSong {
+model ActivityLog {
   id         String   @id @default(cuid())
-  playlistId String
-  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-  songId     String
-  song       Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
-  position   Int      @default(0)
-  createdAt  DateTime @default(now())
-
-  @@unique([playlistId, songId])
-}
-
-model Theme {
-  id              String   @id @default(cuid())
-  name            String   @unique
-  background      String   @default("#09090b")
-  backgroundImage String?
-  primaryColor    String   @default("#f43f5e")
-  secondaryColor  String   @default("#a855f7")
-  accentColor     String   @default("#06b6d4")
-  textColor       String   @default("#ffffff")
-  cardStyle       String?  @default("bg-zinc-900/60 border-white/10")
-  buttonStyle     String?  @default("bg-rose-500 hover:bg-rose-600 text-white")
-  playerStyle     String?  @default("from-rose-500/20 via-purple-600/20 to-cyan-500/20")
-  animationPreset String?  @default("pulse")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  categories Category[]
-}
-
-model SiteSettings {
-  id        String   @id @default(cuid())
-  key       String   @unique
-  value     String
-  updatedAt DateTime @updatedAt
-}
-
-model AdminActivityLog {
-  id         String   @id @default(cuid())
-  adminEmail String
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userEmail  String
   action     String
   entityType String
   entityId   String?
   details    String?
   createdAt  DateTime @default(now())
 }
-
-model AIImport {
-  id             String    @id @default(cuid())
-  sourceUrl      String
-  sourcePlatform String    @default("YOUTUBE")
-  sourceMetadata String?
-  aiResult       String?
-  status         String    @default("ANALYZING")
-  confidence     Int       @default(0)
-  errorMessage   String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  reviewedAt     DateTime?
-  reviewedBy     String?
-}
-
-model AIDiscoveryItem {
-  id              String    @id @default(cuid())
-  sourceUrl       String    @unique
-  sourcePlatform  String    @default("YOUTUBE")
-  title           String
-  artistName      String
-  albumName       String?
-  thumbnailUrl    String?
-  duration        Int       @default(0)
-  publishedAt     DateTime?
-  rawMetadata     String?
-  aiAnalysis      String?
-  languageId      String?
-  language        Language? @relation(fields: [languageId], references: [id], onDelete: SetNull)
-  categoryId      String?
-  category        Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  confidence      Int       @default(0)
-  duplicateStatus String    @default("NONE")
-  status          String    @default("NEW")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  reviewedAt      DateTime?
-  reviewedBy      String?
-}
-

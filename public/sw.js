@@ -1,5 +1,5 @@
 // Mood PWA Service Worker Foundation
-const CACHE_NAME = 'mood-app-shell-v2';
+const CACHE_NAME = 'mood-app-shell-mua3df5z';
 
 const APP_SHELL_ASSETS = [
   '/',

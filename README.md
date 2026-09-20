@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DocVault — Secure Personal Document Manager & Expiry Reminders
+
+DocVault is an end-to-end encrypted personal document vault built on Next.js 15 (App Router), Prisma, PostgreSQL, NextAuth (Google OAuth), and Cloudflare R2 private bucket storage.
+
+## Key Features
+
+- 🔒 **Server-Side AES-256-GCM Encryption**: Files (PDFs, images up to 15MB) are encrypted before uploading to Cloudflare R2 storage.
+- 🛡️ **Zero Public R2 Exposure**: Private Cloudflare R2 bucket with direct public access disabled. Files are decrypted server-side and streamed only to authorized owner sessions.
+- 🔑 **Single-Owner Google OAuth Security**: Restricted access tied strictly to authorized owner account (`kumarbajrang325@gmail.com`).
+- ⏰ **Automated Expiry Reminders**: Tracks document expiration dates (Passports, Driver Licenses, Insurance Policies) with 30/60/90 day warning thresholds via Vercel Cron.
+- 📁 **Searchable & Categorized Organization**: Categorize by ID Proof, Education, Insurance, Financial, Medical, Vehicle, or Other with tag support and full-text search.
+- 📜 **Audit Activity Log**: Comprehensive tracking of document uploads, view sessions, metadata edits, and expiry reminder triggers.
+
+## Tech Stack
+
+- **Framework**: Next.js 15 (App Router) & React 19
+- **Database**: PostgreSQL with Prisma ORM
+- **Authentication**: NextAuth.js v5 (Google OAuth)
+- **Object Storage**: Cloudflare R2 (S3 API Client)
+- **Encryption**: Node.js `crypto` (AES-256-GCM)
+- **Styling**: Tailwind CSS & Lucide Icons
 
 ## Getting Started
 
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Copy `.env.example` to `.env.local` and set required environment variables.
+2. Generate Prisma Client:
+   ```bash
+   npx prisma generate
+   ```
+3. Run database migrations:
+   ```bash
+   npx prisma db push
+   ```
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
