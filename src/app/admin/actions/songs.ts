@@ -81,7 +81,10 @@ export interface SongFormData {
   artistId: string;
   albumId?: string;
   languageId: string;
-  audioUrl: string;
+  sourceUrl?: string;
+  streamUrl?: string;
+  downloadUrl?: string;
+  audioUrl?: string;
   coverImageUrl?: string;
   duration?: number;
   description?: string;
@@ -90,17 +93,15 @@ export interface SongFormData {
   categoryIds: string[];
 }
 
-function validateAudioUrl(url: string) {
-  if (!url || typeof url !== 'string') {
-    throw new Error('Audio URL is required.');
-  }
+function validateOptionalUrl(url?: string | null, fieldName: string = 'URL') {
+  if (!url || !url.trim()) return;
   try {
-    const parsed = new URL(url);
+    const parsed = new URL(url.trim());
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      throw new Error('Audio URL must start with http:// or https://');
+      throw new Error(`${fieldName} must start with http:// or https://`);
     }
   } catch {
-    throw new Error('Invalid Audio URL format.');
+    throw new Error(`Invalid ${fieldName} format.`);
   }
 }
 
@@ -109,13 +110,19 @@ export async function createSong(data: SongFormData) {
   const title = data.title.trim();
   const artistId = data.artistId.trim();
   const languageId = data.languageId.trim();
-  const audioUrl = data.audioUrl.trim();
 
   if (!title || !artistId || !languageId) {
     throw new Error('Title, Artist, and Language are required.');
   }
 
-  validateAudioUrl(audioUrl);
+  const sourceUrl = data.sourceUrl?.trim() || null;
+  const streamUrl = data.streamUrl?.trim() || null;
+  const downloadUrl = data.downloadUrl?.trim() || null;
+  const legacyAudioUrl = data.audioUrl?.trim() || streamUrl || sourceUrl || null;
+
+  validateOptionalUrl(sourceUrl, 'Source URL');
+  validateOptionalUrl(streamUrl, 'Authorized Stream URL');
+  validateOptionalUrl(downloadUrl, 'Authorized Download URL');
 
   const song = await db.song.create({
     data: {
@@ -123,11 +130,14 @@ export async function createSong(data: SongFormData) {
       artistId,
       albumId: data.albumId?.trim() || null,
       languageId,
-      audioUrl,
+      sourceUrl,
+      streamUrl,
+      downloadUrl,
+      audioUrl: legacyAudioUrl,
       coverImageUrl: data.coverImageUrl?.trim() || null,
       duration: Number(data.duration) || 0,
       description: data.description?.trim() || null,
-      isDownloadable: data.isDownloadable !== undefined ? Boolean(data.isDownloadable) : true,
+      isDownloadable: data.isDownloadable && Boolean(downloadUrl),
       isPublished: data.isPublished !== undefined ? Boolean(data.isPublished) : true,
       categories: {
         create: (data.categoryIds || []).map((catId) => ({
@@ -149,15 +159,21 @@ export async function updateSong(id: string, data: SongFormData) {
   const title = data.title.trim();
   const artistId = data.artistId.trim();
   const languageId = data.languageId.trim();
-  const audioUrl = data.audioUrl.trim();
 
   if (!title || !artistId || !languageId) {
     throw new Error('Title, Artist, and Language are required.');
   }
 
-  validateAudioUrl(audioUrl);
+  const sourceUrl = data.sourceUrl?.trim() || null;
+  const streamUrl = data.streamUrl?.trim() || null;
+  const downloadUrl = data.downloadUrl?.trim() || null;
+  const legacyAudioUrl = data.audioUrl?.trim() || streamUrl || sourceUrl || null;
 
-  // Re-link categories using transaction
+  validateOptionalUrl(sourceUrl, 'Source URL');
+  validateOptionalUrl(streamUrl, 'Authorized Stream URL');
+  validateOptionalUrl(downloadUrl, 'Authorized Download URL');
+
+  // Re-link categories
   await db.songCategory.deleteMany({
     where: { songId: id },
   });
@@ -169,11 +185,14 @@ export async function updateSong(id: string, data: SongFormData) {
       artistId,
       albumId: data.albumId?.trim() || null,
       languageId,
-      audioUrl,
+      sourceUrl,
+      streamUrl,
+      downloadUrl,
+      audioUrl: legacyAudioUrl,
       coverImageUrl: data.coverImageUrl?.trim() || null,
       duration: Number(data.duration) || 0,
       description: data.description?.trim() || null,
-      isDownloadable: data.isDownloadable !== undefined ? Boolean(data.isDownloadable) : true,
+      isDownloadable: Boolean(data.isDownloadable && downloadUrl),
       isPublished: data.isPublished !== undefined ? Boolean(data.isPublished) : true,
       categories: {
         create: (data.categoryIds || []).map((catId) => ({

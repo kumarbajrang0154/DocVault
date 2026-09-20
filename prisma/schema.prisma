@@ -74,11 +74,14 @@ model Song {
   album          Album?   @relation(fields: [albumId], references: [id], onDelete: SetNull)
   languageId     String
   language       Language @relation(fields: [languageId], references: [id], onDelete: Restrict)
-  audioUrl       String
+  sourceUrl      String?
+  streamUrl      String?
+  downloadUrl    String?
+  audioUrl       String?
   coverImageUrl  String?
   duration       Int      @default(0)
   description    String?
-  isDownloadable Boolean  @default(true)
+  isDownloadable Boolean  @default(false)
   isPublished    Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

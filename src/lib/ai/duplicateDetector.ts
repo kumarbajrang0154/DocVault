@@ -75,7 +75,7 @@ export async function checkDuplicateSong(input: {
         matchingSongId: exactUrlMatch.id,
         matchingSongTitle: exactUrlMatch.title,
         matchingArtistName: exactUrlMatch.artist.name,
-        matchingSongAudioUrl: exactUrlMatch.audioUrl,
+        matchingSongAudioUrl: exactUrlMatch.audioUrl ?? undefined,
       };
     }
   }
@@ -114,7 +114,7 @@ export async function checkDuplicateSong(input: {
       matchingSongId: bestMatch.id,
       matchingSongTitle: bestMatch.title,
       matchingArtistName: bestMatch.artist.name,
-      matchingSongAudioUrl: bestMatch.audioUrl,
+      matchingSongAudioUrl: bestMatch.audioUrl ?? undefined,
     };
   }
 
@@ -125,7 +125,7 @@ export async function checkDuplicateSong(input: {
       matchingSongId: bestMatch.id,
       matchingSongTitle: bestMatch.title,
       matchingArtistName: bestMatch.artist.name,
-      matchingSongAudioUrl: bestMatch.audioUrl,
+      matchingSongAudioUrl: bestMatch.audioUrl ?? undefined,
     };
   }
 

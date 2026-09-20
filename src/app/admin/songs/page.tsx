@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getSongs, createSong, updateSong, toggleSongPublish, toggleSongDownload, deleteSong } from '@/app/admin/actions/songs';
 import { getLanguages } from '@/app/admin/actions/languages';
 import { getCategories } from '@/app/admin/actions/categories';
@@ -18,8 +18,8 @@ import {
   CheckCircle2, 
   XCircle, 
   Download, 
-  Play, 
-  Globe
+  Globe,
+  ExternalLink
 } from 'lucide-react';
 
 interface SongItem {
@@ -31,7 +31,10 @@ interface SongItem {
   album: { id: string; title: string; coverImageUrl: string | null } | null;
   languageId: string;
   language: { id: string; name: string; code: string };
-  audioUrl: string;
+  sourceUrl: string | null;
+  streamUrl: string | null;
+  downloadUrl: string | null;
+  audioUrl?: string | null;
   coverImageUrl: string | null;
   duration: number;
   description: string | null;
@@ -72,11 +75,13 @@ export default function AdminSongsPage() {
     artistId: '',
     albumId: '',
     languageId: '',
-    audioUrl: '',
+    sourceUrl: '',
+    streamUrl: '',
+    downloadUrl: '',
     coverImageUrl: '',
     duration: 180,
     description: '',
-    isDownloadable: true,
+    isDownloadable: false,
     isPublished: true,
     categoryIds: [] as string[],
   });
@@ -86,7 +91,7 @@ export default function AdminSongsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const reloadSongs = async () => {
+  const fetchSongsData = useCallback(async () => {
     try {
       const res = await getSongs({
         search,
@@ -96,12 +101,18 @@ export default function AdminSongsPage() {
         page,
         limit: 15,
       });
-      setSongs(res.items);
+      setSongs(res.items as unknown as SongItem[]);
       setTotal(res.total);
       setTotalPages(res.totalPages);
     } catch (err: unknown) {
-      setErrorMessage((err as Error).message || 'Failed to fetch songs');
+      setErrorMessage((err as Error).message || 'Failed to load songs');
+    } finally {
+      setIsLoading(false);
     }
+  }, [search, filterLang, filterCat, filterArtist, page]);
+
+  const reloadSongs = () => {
+    void fetchSongsData();
   };
 
   useEffect(() => {
@@ -117,17 +128,19 @@ export default function AdminSongsPage() {
           setLanguages(langRes.items);
           setCategories(catRes.items);
           setArtists(artRes.items);
-          setAlbums(albRes.items.map((a) => ({ id: a.id, name: a.title })));
+          setAlbums(albRes.items.map((alb) => ({ id: alb.id, name: `${alb.title} (${alb.artist.name})` })));
         }
       })
-      .catch((err) => console.error('Error fetching dependencies:', err));
+      .catch((err) => {
+        if (isMounted) setErrorMessage((err as Error).message);
+      });
     return () => {
       isMounted = false;
     };
   }, []);
 
   useEffect(() => {
-    let isMounted = true;
+    let ignore = false;
     getSongs({
       search,
       languageId: filterLang || undefined,
@@ -137,23 +150,24 @@ export default function AdminSongsPage() {
       limit: 15,
     })
       .then((res) => {
-        if (isMounted) {
-          setSongs(res.items);
+        if (!ignore) {
+          setSongs(res.items as unknown as SongItem[]);
           setTotal(res.total);
           setTotalPages(res.totalPages);
           setIsLoading(false);
         }
       })
       .catch((err) => {
-        if (isMounted) {
-          setErrorMessage(err.message || 'Failed to fetch songs');
+        if (!ignore) {
+          setErrorMessage((err as Error).message || 'Failed to load songs');
           setIsLoading(false);
         }
       });
+
     return () => {
-      isMounted = false;
+      ignore = true;
     };
-  }, [filterArtist, filterCat, filterLang, page, search]);
+  }, [search, filterLang, filterCat, filterArtist, page]);
 
   const handleOpenCreate = () => {
     setEditingItem(null);
@@ -162,44 +176,48 @@ export default function AdminSongsPage() {
       artistId: artists[0]?.id || '',
       albumId: '',
       languageId: languages[0]?.id || '',
-      audioUrl: '',
+      sourceUrl: '',
+      streamUrl: '',
+      downloadUrl: '',
       coverImageUrl: '',
       duration: 180,
       description: '',
-      isDownloadable: true,
+      isDownloadable: false,
       isPublished: true,
-      categoryIds: categories.length > 0 ? [categories[0].id] : [],
+      categoryIds: categories.slice(0, 1).map((c) => c.id),
     });
+    setErrorMessage('');
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (song: SongItem) => {
-    setEditingItem(song);
+  const handleOpenEdit = (item: SongItem) => {
+    setEditingItem(item);
     setFormData({
-      title: song.title,
-      artistId: song.artistId,
-      albumId: song.albumId || '',
-      languageId: song.languageId,
-      audioUrl: song.audioUrl,
-      coverImageUrl: song.coverImageUrl || '',
-      duration: song.duration,
-      description: song.description || '',
-      isDownloadable: song.isDownloadable,
-      isPublished: song.isPublished,
-      categoryIds: song.categories.map((c) => c.category.id),
+      title: item.title,
+      artistId: item.artistId,
+      albumId: item.albumId || '',
+      languageId: item.languageId,
+      sourceUrl: item.sourceUrl || '',
+      streamUrl: item.streamUrl || '',
+      downloadUrl: item.downloadUrl || '',
+      coverImageUrl: item.coverImageUrl || '',
+      duration: item.duration || 180,
+      description: item.description || '',
+      isDownloadable: item.isDownloadable,
+      isPublished: item.isPublished,
+      categoryIds: item.categories.map((c) => c.category.id),
     });
+    setErrorMessage('');
     setIsModalOpen(true);
   };
 
-  const handleCategoryToggle = (catId: string) => {
+  const handleCategoryToggle = (categoryId: string) => {
     setFormData((prev) => {
-      const exists = prev.categoryIds.includes(catId);
-      return {
-        ...prev,
-        categoryIds: exists
-          ? prev.categoryIds.filter((id) => id !== catId)
-          : [...prev.categoryIds, catId],
-      };
+      const exists = prev.categoryIds.includes(categoryId);
+      if (exists) {
+        return { ...prev, categoryIds: prev.categoryIds.filter((id) => id !== categoryId) };
+      }
+      return { ...prev, categoryIds: [...prev.categoryIds, categoryId] };
     });
   };
 
@@ -207,13 +225,15 @@ export default function AdminSongsPage() {
     e.preventDefault();
     setIsSubmitting(true);
     setErrorMessage('');
+    setSuccessMessage('');
+
     try {
       if (editingItem) {
         await updateSong(editingItem.id, formData);
         setSuccessMessage('Song updated successfully.');
       } else {
         await createSong(formData);
-        setSuccessMessage('Song created successfully.');
+        setSuccessMessage('Song created and published successfully.');
       }
       setIsModalOpen(false);
       reloadSongs();
@@ -224,19 +244,19 @@ export default function AdminSongsPage() {
     }
   };
 
-  const handleTogglePublish = async (song: SongItem) => {
+  const handleTogglePublish = async (id: string, current: boolean) => {
     try {
-      await toggleSongPublish(song.id, !song.isPublished);
-      reloadSongs();
+      await toggleSongPublish(id, !current);
+      setSongs(songs.map((s) => (s.id === id ? { ...s, isPublished: !current } : s)));
     } catch (err: unknown) {
       setErrorMessage((err as Error).message);
     }
   };
 
-  const handleToggleDownload = async (song: SongItem) => {
+  const handleToggleDownload = async (id: string, current: boolean) => {
     try {
-      await toggleSongDownload(song.id, !song.isDownloadable);
-      reloadSongs();
+      await toggleSongDownload(id, !current);
+      setSongs(songs.map((s) => (s.id === id ? { ...s, isDownloadable: !current } : s)));
     } catch (err: unknown) {
       setErrorMessage((err as Error).message);
     }
@@ -267,7 +287,7 @@ export default function AdminSongsPage() {
             <span>Songs Catalog Management</span>
           </h1>
           <p className="text-xs text-zinc-400 mt-1">
-            Manage audio tracks, languages, moods, cover images, and audio sources.
+            Manage reference source URLs, authorized audio stream URLs, download permissions, and track metadata.
           </p>
         </div>
 
@@ -355,8 +375,8 @@ export default function AdminSongsPage() {
                 <th className="px-6 py-4">Song Track</th>
                 <th className="px-6 py-4">Artist & Album</th>
                 <th className="px-6 py-4">Language</th>
-                <th className="px-6 py-4">Mood Categories</th>
-                <th className="px-6 py-4">Downloadable</th>
+                <th className="px-6 py-4">Playability</th>
+                <th className="px-6 py-4">Download</th>
                 <th className="px-6 py-4">Status</th>
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
@@ -375,117 +395,150 @@ export default function AdminSongsPage() {
                   </td>
                 </tr>
               ) : (
-                songs.map((song) => (
-                  <tr key={song.id} className="hover:bg-white/5 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 overflow-hidden rounded-xl border border-white/10 bg-zinc-800 flex items-center justify-center shrink-0">
-                          {song.coverImageUrl || song.album?.coverImageUrl ? (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img 
-                              src={song.coverImageUrl || song.album?.coverImageUrl || ''} 
-                              alt={song.title} 
-                              className="h-full w-full object-cover" 
-                            />
-                          ) : (
-                            <Music className="h-5 w-5 text-rose-400" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="font-bold text-white text-sm flex items-center gap-1.5">
-                            <span>{song.title}</span>
-                            <a
-                              href={song.audioUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-zinc-500 hover:text-cyan-400"
-                              title="Listen audio preview"
-                            >
-                              <Play className="h-3 w-3 fill-current" />
-                            </a>
+                songs.map((song) => {
+                  const hasStream = Boolean(song.streamUrl);
+                  const isDl = Boolean(song.isDownloadable && song.downloadUrl);
+
+                  return (
+                    <tr key={song.id} className="hover:bg-white/5 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 overflow-hidden rounded-xl border border-white/10 bg-zinc-800 flex items-center justify-center shrink-0">
+                            {song.coverImageUrl || song.album?.coverImageUrl ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img 
+                                src={song.coverImageUrl || song.album?.coverImageUrl || ''} 
+                                alt={song.title} 
+                                className="h-full w-full object-cover" 
+                              />
+                            ) : (
+                              <Music className="h-5 w-5 text-rose-400" />
+                            )}
                           </div>
-                          <span className="text-[11px] text-zinc-500 block font-mono">
-                            {Math.floor(song.duration / 60)}:{(song.duration % 60).toString().padStart(2, '0')}
-                          </span>
+                          <div>
+                            <div className="font-bold text-white text-sm flex items-center gap-1.5">
+                              <span>{song.title}</span>
+                              {song.sourceUrl && (
+                                <a
+                                  href={song.sourceUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-cyan-400 hover:text-cyan-300"
+                                  title="View Reference Source URL"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
+                              )}
+                            </div>
+                            {song.description && (
+                              <p className="text-[11px] text-zinc-400 line-clamp-1">{song.description}</p>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="font-semibold text-purple-300">{song.artist?.name}</div>
-                      {song.album && <div className="text-[11px] text-zinc-500">{song.album.title}</div>}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-blue-300">
-                        <Globe className="h-3 w-3" />
-                        <span>{song.language?.name}</span>
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-wrap gap-1">
-                        {song.categories.map((c) => (
-                          <span
-                            key={c.category.id}
-                            className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-300"
-                          >
-                            {c.category.name}
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <div className="font-semibold text-zinc-200">{song.artist.name}</div>
+                        <div className="text-[11px] text-zinc-400">{song.album?.title || 'Single'}</div>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center gap-1 font-medium text-zinc-300 bg-zinc-800/80 px-2.5 py-1 rounded-lg">
+                          <Globe className="h-3 w-3 text-cyan-400" />
+                          <span>{song.language.name}</span>
+                        </span>
+                      </td>
+
+                      {/* Playability Badge */}
+                      <td className="px-6 py-4">
+                        {hasStream ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
+                            🟢 Playable
                           </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <button
-                        onClick={() => handleToggleDownload(song)}
-                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold border transition-colors ${
-                          song.isDownloadable
-                            ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-300'
-                            : 'bg-zinc-800 border-white/10 text-zinc-500'
-                        }`}
-                      >
-                        <Download className="h-3 w-3" />
-                        <span>{song.isDownloadable ? 'Yes' : 'No'}</span>
-                      </button>
-                    </td>
-                    <td className="px-6 py-4">
-                      <button
-                        onClick={() => handleTogglePublish(song)}
-                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold border transition-colors ${
-                          song.isPublished
-                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                            : 'bg-zinc-800 border-white/10 text-zinc-500'
-                        }`}
-                      >
-                        {song.isPublished ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                        <span>{song.isPublished ? 'Published' : 'Draft'}</span>
-                      </button>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-zinc-400 bg-zinc-800 border border-white/10 px-2.5 py-1 rounded-full">
+                            ⚪ Audio Missing
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Download Badge */}
+                      <td className="px-6 py-4">
+                        {isDl ? (
+                          <button
+                            onClick={() => handleToggleDownload(song.id, song.isDownloadable)}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-1 rounded-full hover:bg-cyan-500/20"
+                          >
+                            <Download className="h-3 w-3" />
+                            <span>Downloadable</span>
+                          </button>
+                        ) : (
+                          <span className="text-[11px] font-medium text-zinc-500">
+                            No Download
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-6 py-4">
                         <button
-                          onClick={() => handleOpenEdit(song)}
-                          className="rounded-lg border border-white/10 bg-white/5 p-2 text-zinc-300 hover:bg-white/10 hover:text-white"
-                          title="Edit"
+                          onClick={() => handleTogglePublish(song.id, song.isPublished)}
+                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                            song.isPublished
+                              ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20'
+                              : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                          }`}
                         >
-                          <Edit2 className="h-3.5 w-3.5" />
+                          {song.isPublished ? (
+                            <>
+                              <CheckCircle2 className="h-3 w-3" /> Published
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="h-3 w-3" /> Draft
+                            </>
+                          )}
                         </button>
-                        <button
-                          onClick={() => setDeletingId(song.id)}
-                          className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-2 text-rose-400 hover:bg-rose-500/20"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleOpenEdit(song)}
+                            className="p-1.5 rounded-lg border border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white transition-colors"
+                            title="Edit Song Track"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+
+                          <button
+                            onClick={() => setDeletingId(song.id)}
+                            className="p-1.5 rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors"
+                            title="Delete Song Track"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
 
-        <div className="p-4">
-          <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
-        </div>
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="p-4 border-t border-white/10">
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              onPageChange={(p) => setPage(p)}
+            />
+          </div>
+        )}
       </div>
 
       {/* Create / Edit Modal */}
@@ -493,7 +546,6 @@ export default function AdminSongsPage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={editingItem ? 'Edit Song Track' : 'Add New Song Track'}
-        maxWidth="2xl"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -562,18 +614,48 @@ export default function AdminSongsPage() {
             </div>
           </div>
 
+          {/* Reference Source URL */}
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1">Authorized Audio URL (.mp3 / stream)</label>
+            <label className="block text-xs font-semibold text-cyan-400 mb-1">Source / Reference URL (YouTube or Discovery URL)</label>
             <input
               type="url"
-              required
-              placeholder="https://example.com/authorized/audio.mp3"
-              value={formData.audioUrl}
-              onChange={(e) => setFormData({ ...formData, audioUrl: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:border-rose-500 focus:outline-none font-mono"
+              placeholder="https://www.youtube.com/watch?v=... (Metadata reference only)"
+              value={formData.sourceUrl}
+              onChange={(e) => setFormData({ ...formData, sourceUrl: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:border-cyan-500 focus:outline-none font-mono"
             />
             <span className="text-[11px] text-zinc-500 mt-1 block">
-              Enter authorized HTTP/HTTPS stream or audio URL.
+              Reference metadata link. Will NOT be passed to audio player or download button.
+            </span>
+          </div>
+
+          {/* Authorized Stream URL */}
+          <div>
+            <label className="block text-xs font-semibold text-emerald-400 mb-1">Authorized Audio Stream URL (.mp3 / CDN)</label>
+            <input
+              type="url"
+              placeholder="https://cdn.example.com/audio/song.mp3"
+              value={formData.streamUrl}
+              onChange={(e) => setFormData({ ...formData, streamUrl: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:border-emerald-500 focus:outline-none font-mono"
+            />
+            <span className="text-[11px] text-zinc-500 mt-1 block">
+              Actual playable HTML5 audio stream URL used by Mood player.
+            </span>
+          </div>
+
+          {/* Authorized Download URL */}
+          <div>
+            <label className="block text-xs font-semibold text-purple-400 mb-1">Authorized Download File URL (Optional)</label>
+            <input
+              type="url"
+              placeholder="https://cdn.example.com/audio/song.mp3"
+              value={formData.downloadUrl}
+              onChange={(e) => setFormData({ ...formData, downloadUrl: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:border-purple-500 focus:outline-none font-mono"
+            />
+            <span className="text-[11px] text-zinc-500 mt-1 block">
+              Actual downloadable audio file URL streamed by server attachment download endpoint.
             </span>
           </div>
 

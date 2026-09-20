@@ -41,6 +41,9 @@ export function AIImportClient({ languages, categories }: AIImportClientProps) {
     albumName: '',
     languageId: '',
     categoryId: '',
+    sourceUrl: '',
+    streamUrl: '',
+    downloadUrl: '',
     audioUrl: '',
     coverImageUrl: '',
     description: '',
@@ -69,10 +72,13 @@ export function AIImportClient({ languages, categories }: AIImportClientProps) {
           albumName: res.classification.albumName || 'Single',
           languageId: res.classification.languageId,
           categoryId: res.classification.categoryId,
+          sourceUrl: res.metadata.sourceUrl,
+          streamUrl: '',
+          downloadUrl: '',
           audioUrl: res.metadata.sourceUrl,
           coverImageUrl: res.metadata.thumbnailUrl,
           description: res.classification.description || '',
-          isDownloadable: true,
+          isDownloadable: false,
         });
       } else {
         setError(res.error || 'Failed to analyze URL.');
@@ -397,6 +403,55 @@ export function AIImportClient({ languages, categories }: AIImportClientProps) {
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div>
+              <label className="block font-medium text-zinc-300 mb-1">Source Webpage URL (Reference)</label>
+              <input
+                type="url"
+                value={formData.sourceUrl}
+                onChange={(e) => setFormData({ ...formData, sourceUrl: e.target.value })}
+                placeholder="https://www.youtube.com/watch?v=..."
+                className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3.5 py-2.5 text-white placeholder-zinc-600"
+              />
+            </div>
+
+            <div>
+              <label className="block font-medium text-zinc-300 mb-1">Playable Audio Stream URL (Optional direct MP3)</label>
+              <input
+                type="url"
+                value={formData.streamUrl}
+                onChange={(e) => setFormData({ ...formData, streamUrl: e.target.value })}
+                placeholder="https://example.com/stream.mp3"
+                className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3.5 py-2.5 text-white placeholder-zinc-600"
+              />
+              <span className="text-[10px] text-zinc-500 block mt-1">
+                HTML5 player requires a direct audio URL (.mp3/.aac/CDN). Leave blank if unavailable.
+              </span>
+            </div>
+
+            <div>
+              <label className="block font-medium text-zinc-300 mb-1">Downloadable Audio File URL (Optional direct MP3)</label>
+              <input
+                type="url"
+                value={formData.downloadUrl}
+                onChange={(e) => setFormData({ ...formData, downloadUrl: e.target.value })}
+                placeholder="https://example.com/download.mp3"
+                className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3.5 py-2.5 text-white placeholder-zinc-600"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="importIsDownloadable"
+                checked={formData.isDownloadable}
+                onChange={(e) => setFormData({ ...formData, isDownloadable: e.target.checked })}
+                className="rounded border-white/10 bg-zinc-950 text-purple-600 focus:ring-purple-500 h-4 w-4"
+              />
+              <label htmlFor="importIsDownloadable" className="text-zinc-300 font-medium cursor-pointer">
+                Allow Offline Download
+              </label>
             </div>
 
             <div className="pt-4 flex justify-end gap-3">

@@ -90,7 +90,10 @@ export async function approveImportAction(
     albumName?: string;
     languageId: string;
     categoryId: string;
-    audioUrl: string;
+    sourceUrl?: string;
+    streamUrl?: string;
+    downloadUrl?: string;
+    audioUrl?: string;
     coverImageUrl?: string;
     description?: string;
     isDownloadable?: boolean;
@@ -143,6 +146,10 @@ export async function approveImportAction(
     albumId = album.id;
   }
 
+  const sourceUrl = editedData.sourceUrl?.trim() || importRecord.sourceUrl;
+  const streamUrl = editedData.streamUrl?.trim() || null;
+  const downloadUrl = editedData.downloadUrl?.trim() || null;
+
   // 3. Create Song
   const song = await db.song.create({
     data: {
@@ -150,10 +157,13 @@ export async function approveImportAction(
       artistId: artist.id,
       albumId: albumId || null,
       languageId: editedData.languageId,
-      audioUrl: editedData.audioUrl.trim(),
+      sourceUrl,
+      streamUrl,
+      downloadUrl,
+      audioUrl: streamUrl || sourceUrl,
       coverImageUrl: editedData.coverImageUrl?.trim() || null,
       description: editedData.description?.trim() || null,
-      isDownloadable: editedData.isDownloadable ?? true,
+      isDownloadable: Boolean(editedData.isDownloadable && downloadUrl),
       isPublished: true,
       categories: {
         create: {
@@ -290,6 +300,8 @@ export async function approveDiscoveryAction(
     albumName?: string;
     languageId?: string;
     categoryId?: string;
+    streamUrl?: string;
+    downloadUrl?: string;
   }
 ) {
   const session = await requireAdmin();
@@ -350,6 +362,10 @@ export async function approveDiscoveryAction(
     albumId = album.id;
   }
 
+  const sourceUrl = item.sourceUrl;
+  const streamUrl = editedData?.streamUrl?.trim() || null;
+  const downloadUrl = editedData?.downloadUrl?.trim() || null;
+
   // 3. Create Song
   const song = await db.song.create({
     data: {
@@ -357,11 +373,14 @@ export async function approveDiscoveryAction(
       artistId: artist.id,
       albumId: albumId || null,
       languageId: finalLanguageId,
-      audioUrl: item.sourceUrl,
+      sourceUrl,
+      streamUrl,
+      downloadUrl,
+      audioUrl: streamUrl || sourceUrl,
       coverImageUrl: item.thumbnailUrl || null,
       duration: item.duration || 0,
       description: `AI Discovered Release (${item.sourcePlatform})`,
-      isDownloadable: true,
+      isDownloadable: Boolean(downloadUrl),
       isPublished: true,
       categories: {
         create: {

@@ -19,13 +19,19 @@ import {
   VolumeX, 
   Download, 
   Disc,
-  Info
+  Info,
+  AlertCircle,
+  ExternalLink
 } from 'lucide-react';
 
 interface SongTrack {
   id: string;
   title: string;
-  audioUrl: string;
+  sourceUrl: string | null;
+  streamUrl: string | null;
+  downloadUrl: string | null;
+  audioUrl?: string | null;
+  hasPlayableAudio: boolean;
   coverImageUrl: string | null;
   duration: number;
   description: string | null;
@@ -47,32 +53,27 @@ export default function MusicPage() {
   const [volume, setVolume] = useState<number>(0.8);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isLoadingSongs, setIsLoadingSongs] = useState<boolean>(true);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const selectedLang = preferences?.language;
   const selectedMood = preferences?.mood;
 
+  const currentSong = songs[currentTrackIndex] || null;
+
   const handleNextTrack = useCallback(() => {
     if (songs.length === 0) return;
+    setPlaybackError(null);
     setCurrentTrackIndex((prev) => (prev + 1) % songs.length);
     setIsPlaying(false);
-    setTimeout(() => {
-      if (audioRef.current) {
-        audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
-      }
-    }, 100);
   }, [songs.length]);
 
   const handlePrevTrack = useCallback(() => {
     if (songs.length === 0) return;
+    setPlaybackError(null);
     setCurrentTrackIndex((prev) => (prev - 1 + songs.length) % songs.length);
     setIsPlaying(false);
-    setTimeout(() => {
-      if (audioRef.current) {
-        audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
-      }
-    }, 100);
   }, [songs.length]);
 
   // Fetch published songs matching user selection
@@ -80,6 +81,7 @@ export default function MusicPage() {
     async function loadMatchingSongs() {
       if (!selectedLang && !selectedMood) return;
       setIsLoadingSongs(true);
+      setPlaybackError(null);
       try {
         const queryParams = new URLSearchParams();
         if (selectedLang) queryParams.set('language', selectedLang);
@@ -102,8 +104,6 @@ export default function MusicPage() {
     loadMatchingSongs();
   }, [selectedLang, selectedMood]);
 
-  const currentSong = songs[currentTrackIndex] || null;
-
   // Audio Playback Listeners
   useEffect(() => {
     const audio = audioRef.current;
@@ -125,14 +125,28 @@ export default function MusicPage() {
   }, [currentSong, handleNextTrack]);
 
   const togglePlay = () => {
+    setPlaybackError(null);
+
+    if (!currentSong || !currentSong.streamUrl) {
+      setPlaybackError('Audio source unavailable for this track.');
+      return;
+    }
+
     const audio = audioRef.current;
-    if (!audio || !currentSong) return;
+    if (!audio) return;
 
     if (isPlaying) {
       audio.pause();
       setIsPlaying(false);
     } else {
-      audio.play().then(() => setIsPlaying(true)).catch((e) => console.error('Audio playback error:', e));
+      audio
+        .play()
+        .then(() => setIsPlaying(true))
+        .catch((e) => {
+          console.error('Audio playback error:', e);
+          setIsPlaying(false);
+          setPlaybackError('Unable to play this audio source.');
+        });
     }
   };
 
@@ -181,12 +195,17 @@ export default function MusicPage() {
     <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 bg-ambient-gradient">
       <Navbar onStartListening={() => setIsModalOpen(true)} />
 
-      {/* Hidden Audio Element */}
-      {currentSong && (
+      {/* HTML5 Audio Element: ONLY rendered when valid streamUrl is present */}
+      {currentSong?.streamUrl && (
         <audio
+          key={currentSong.id}
           ref={audioRef}
-          src={currentSong.audioUrl}
+          src={currentSong.streamUrl}
           preload="metadata"
+          onError={() => {
+            setIsPlaying(false);
+            setPlaybackError('Unable to play this audio source.');
+          }}
         />
       )}
 
@@ -203,7 +222,7 @@ export default function MusicPage() {
               </div>
               <div className="text-left">
                 <h1 className="text-lg font-extrabold text-white">Mood Music Player</h1>
-                <p className="text-xs text-zinc-400">Live DB Stream</p>
+                <p className="text-xs text-zinc-400">Live DB Catalog Stream</p>
               </div>
             </div>
 
@@ -232,6 +251,14 @@ export default function MusicPage() {
             </div>
           </div>
 
+          {/* Error Notice */}
+          {playbackError && (
+            <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-semibold text-rose-300 flex items-center justify-center gap-2">
+              <AlertCircle className="h-4 w-4 text-rose-400" />
+              <span>{playbackError}</span>
+            </div>
+          )}
+
           {/* Player Main Content */}
           {isLoadingSongs ? (
             <div className="py-16 text-center space-y-3">
@@ -245,8 +272,8 @@ export default function MusicPage() {
                 <Disc className="h-7 w-7" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-white">No Tracks Found in Catalog</h3>
-                <p className="text-xs text-zinc-400 max-w-sm mx-auto mt-1 leading-relaxed">
+                <h3 className="text-sm font-bold text-white">No Tracks Found</h3>
+                <p className="mt-1 text-xs text-zinc-400">
                   No published songs matching <span className="font-bold text-cyan-300">{selectedLang}</span> + <span className="font-bold text-rose-300">{selectedMood}</span> are available in the catalog yet.
                 </p>
               </div>
@@ -289,29 +316,50 @@ export default function MusicPage() {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider block mb-1">
-                    Track {currentTrackIndex + 1} of {songs.length}
-                  </span>
+                  <div className="flex items-center gap-2 justify-center sm:justify-start mb-1">
+                    <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider block">
+                      Track {currentTrackIndex + 1} of {songs.length}
+                    </span>
+                    {!currentSong?.hasPlayableAudio && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-white/10">
+                        ⚪ Audio Source Unavailable
+                      </span>
+                    )}
+                  </div>
                   <h2 className="text-xl font-extrabold text-white truncate">{currentSong?.title}</h2>
                   <p className="text-sm font-semibold text-purple-300 mt-0.5">{currentSong?.artist.name}</p>
                   {currentSong?.album && (
                     <p className="text-xs text-zinc-500 mt-0.5 font-medium">{currentSong.album.title}</p>
                   )}
+
+                  {/* Reference Source Link if present */}
+                  {currentSong?.sourceUrl && (
+                    <a
+                      href={currentSong.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:underline mt-2"
+                    >
+                      <span>Reference Source</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
                 </div>
 
-                {/* Download Button if permitted */}
-                {currentSong?.isDownloadable && (
+                {/* Download Button ONLY if isDownloadable AND downloadUrl exists */}
+                {currentSong?.isDownloadable && currentSong?.downloadUrl ? (
                   <a
-                    href={currentSong.audioUrl}
-                    download
-                    target="_blank"
-                    rel="noreferrer"
+                    href={`/api/music/${currentSong.id}/download`}
                     className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs font-bold text-cyan-300 hover:bg-cyan-500/20 transition-all shrink-0"
                     title="Download authorized audio file"
                   >
                     <Download className="h-4 w-4" />
                     <span>Download</span>
                   </a>
+                ) : (
+                  <span className="text-[11px] text-zinc-500 border border-white/5 bg-zinc-900 px-3 py-1.5 rounded-full">
+                    Download Unavailable
+                  </span>
                 )}
               </div>
 
@@ -323,7 +371,8 @@ export default function MusicPage() {
                   max={duration || 100}
                   value={currentTime}
                   onChange={handleSeek}
-                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                  disabled={!currentSong?.hasPlayableAudio}
+                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-rose-500 disabled:opacity-40"
                 />
                 <div className="flex justify-between text-[11px] text-zinc-400 font-mono">
                   <span>{formatTime(currentTime)}</span>
@@ -336,7 +385,8 @@ export default function MusicPage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={toggleMute}
-                    className="p-2 text-zinc-400 hover:text-white"
+                    disabled={!currentSong?.hasPlayableAudio}
+                    className="p-2 text-zinc-400 hover:text-white disabled:opacity-40"
                   >
                     {isMuted ? <VolumeX className="h-5 w-5 text-rose-400" /> : <Volume2 className="h-5 w-5" />}
                   </button>
@@ -347,7 +397,8 @@ export default function MusicPage() {
                     step="0.05"
                     value={isMuted ? 0 : volume}
                     onChange={handleVolumeChange}
-                    className="w-20 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                    disabled={!currentSong?.hasPlayableAudio}
+                    className="w-20 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-rose-500 disabled:opacity-40"
                   />
                 </div>
 
@@ -361,7 +412,8 @@ export default function MusicPage() {
 
                   <button
                     onClick={togglePlay}
-                    className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-600 text-white shadow-lg shadow-rose-950/50 hover:bg-rose-500 transition-all"
+                    disabled={!currentSong?.hasPlayableAudio}
+                    className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-600 text-white shadow-lg shadow-rose-950/50 hover:bg-rose-500 disabled:opacity-50 transition-all"
                   >
                     {isPlaying ? <Pause className="h-6 w-6 fill-current" /> : <Play className="h-6 w-6 fill-current ml-0.5" />}
                   </button>
