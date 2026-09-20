@@ -27,7 +27,7 @@ interface OnboardingModalProps {
   canDismiss?: boolean;
 }
 
-const LANGUAGES = [
+const DEFAULT_LANGUAGES = [
   { id: 'Hindi', name: 'Hindi', native: 'हिन्दी' },
   { id: 'English', name: 'English', native: 'English' },
   { id: 'Nepali', name: 'Nepali', native: 'नेपाली' },
@@ -39,64 +39,14 @@ const LANGUAGES = [
   { id: 'Telugu', name: 'Telugu', native: 'తెలుగు' },
 ];
 
-interface MoodOption {
-  id: string;
-  name: string;
-  icon: React.ReactNode;
-  gradient: string;
-  borderColor: string;
-}
-
-const MOOD_OPTIONS: MoodOption[] = [
-  {
-    id: 'Romantic',
-    name: 'Romantic',
-    icon: <Heart className="h-5 w-5 text-rose-400" />,
-    gradient: 'from-rose-500/20 to-rose-600/5',
-    borderColor: 'border-rose-500/40',
-  },
-  {
-    id: 'Sad',
-    name: 'Sad',
-    icon: <CloudRain className="h-5 w-5 text-indigo-400" />,
-    gradient: 'from-indigo-500/20 to-indigo-600/5',
-    borderColor: 'border-indigo-500/40',
-  },
-  {
-    id: 'One Side Love',
-    name: 'One Side Love',
-    icon: <HeartHandshake className="h-5 w-5 text-purple-400" />,
-    gradient: 'from-purple-500/20 to-purple-600/5',
-    borderColor: 'border-purple-500/40',
-  },
-  {
-    id: 'Banger',
-    name: 'Banger',
-    icon: <Flame className="h-5 w-5 text-emerald-400" />,
-    gradient: 'from-emerald-500/20 to-emerald-600/5',
-    borderColor: 'border-emerald-500/40',
-  },
-  {
-    id: 'Mashup',
-    name: 'Mashup',
-    icon: <Music className="h-5 w-5 text-cyan-400" />,
-    gradient: 'from-cyan-500/20 to-cyan-600/5',
-    borderColor: 'border-cyan-500/40',
-  },
-  {
-    id: 'Funny',
-    name: 'Funny',
-    icon: <Laugh className="h-5 w-5 text-amber-400" />,
-    gradient: 'from-amber-500/20 to-amber-600/5',
-    borderColor: 'border-amber-500/40',
-  },
-  {
-    id: 'Bus Driver Playlist',
-    name: 'Bus Driver Playlist',
-    icon: <Bus className="h-5 w-5 text-orange-400" />,
-    gradient: 'from-orange-500/20 to-orange-600/5',
-    borderColor: 'border-orange-500/40',
-  },
+const DEFAULT_MOODS = [
+  { id: 'Romantic', name: 'Romantic', icon: <Heart className="h-5 w-5 text-rose-400" /> },
+  { id: 'Sad', name: 'Sad', icon: <CloudRain className="h-5 w-5 text-indigo-400" /> },
+  { id: 'One Side Love', name: 'One Side Love', icon: <HeartHandshake className="h-5 w-5 text-purple-400" /> },
+  { id: 'Banger', name: 'Banger', icon: <Flame className="h-5 w-5 text-emerald-400" /> },
+  { id: 'Mashup', name: 'Mashup', icon: <Music className="h-5 w-5 text-cyan-400" /> },
+  { id: 'Funny', name: 'Funny', icon: <Laugh className="h-5 w-5 text-amber-400" /> },
+  { id: 'Bus Driver Playlist', name: 'Bus Driver Playlist', icon: <Bus className="h-5 w-5 text-orange-400" /> },
 ];
 
 export function OnboardingModal({
@@ -112,6 +62,9 @@ export function OnboardingModal({
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(initialLanguage);
   const [selectedMood, setSelectedMood] = useState<string | null>(initialMood);
 
+  const [languages, setLanguages] = useState(DEFAULT_LANGUAGES);
+  const [moods, setMoods] = useState(DEFAULT_MOODS);
+
   // Sync state when modal open state transitions to true
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   if (isOpen !== prevIsOpen) {
@@ -122,6 +75,44 @@ export function OnboardingModal({
       setStep(1);
     }
   }
+
+  // Fetch dynamic database options
+  useEffect(() => {
+    async function loadOptions() {
+      try {
+        const res = await fetch('/api/options');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.languages && data.languages.length > 0) {
+            setLanguages(
+              data.languages.map((l: { id: string; name: string }) => ({
+                id: l.name,
+                name: l.name,
+                native: l.name,
+              }))
+            );
+          }
+          if (data.categories && data.categories.length > 0) {
+            setMoods(
+              data.categories.map((c: { id: string; name: string }) => {
+                const match = DEFAULT_MOODS.find((m) => m.name.toLowerCase() === c.name.toLowerCase());
+                return {
+                  id: c.name,
+                  name: c.name,
+                  icon: match ? match.icon : <Sparkles className="h-5 w-5 text-rose-400" />,
+                };
+              })
+            );
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load dynamic onboarding options:', err);
+      }
+    }
+    if (isOpen) {
+      loadOptions();
+    }
+  }, [isOpen]);
 
   // Lock body scroll when modal is active
   useEffect(() => {
@@ -225,7 +216,7 @@ export function OnboardingModal({
 
             {/* Language Grid */}
             <div className="grid grid-cols-3 gap-2.5 sm:gap-3 max-h-[320px] overflow-y-auto pr-1 py-1">
-              {LANGUAGES.map((lang) => {
+              {languages.map((lang) => {
                 const isSelected = selectedLanguage === lang.name;
                 return (
                   <button
@@ -285,7 +276,7 @@ export function OnboardingModal({
 
             {/* Mood Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 max-h-[320px] overflow-y-auto pr-1 py-1">
-              {MOOD_OPTIONS.map((mood) => {
+              {moods.map((mood) => {
                 const isSelected = selectedMood === mood.name;
                 return (
                   <button

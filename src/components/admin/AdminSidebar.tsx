@@ -6,20 +6,25 @@ import { usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, 
   Music, 
+  UserSquare2,
+  DiscAlbum,
   Layers, 
   Globe, 
   ListMusic, 
   Palette, 
   Settings,
-  Lock
+  History,
+  ShieldCheck,
+  Sparkles,
+  Link as LinkIcon,
+  Compass,
+  ListFilter
 } from 'lucide-react';
 
 interface SidebarItem {
   title: string;
   href: string;
   icon: React.ReactNode;
-  active?: boolean;
-  disabled?: boolean;
 }
 
 interface AdminSidebarProps {
@@ -35,43 +40,71 @@ export function AdminSidebar({ isOpen = false, onClose }: AdminSidebarProps) {
       title: 'Overview',
       href: '/admin',
       icon: <LayoutDashboard className="h-4 w-4" />,
-      active: pathname === '/admin',
+    },
+    {
+      title: 'AI Music Hub',
+      href: '/admin/ai',
+      icon: <Sparkles className="h-4 w-4 text-purple-400" />,
+    },
+    {
+      title: 'AI URL Import',
+      href: '/admin/ai/import',
+      icon: <LinkIcon className="h-4 w-4 text-cyan-400" />,
+    },
+    {
+      title: 'AI Discovery',
+      href: '/admin/ai/discovery',
+      icon: <Compass className="h-4 w-4 text-amber-400" />,
+    },
+    {
+      title: 'AI Review Queue',
+      href: '/admin/ai/review',
+      icon: <ListFilter className="h-4 w-4 text-emerald-400" />,
     },
     {
       title: 'Songs',
       href: '/admin/songs',
       icon: <Music className="h-4 w-4" />,
-      disabled: true,
     },
     {
-      title: 'Categories',
+      title: 'Artists',
+      href: '/admin/artists',
+      icon: <UserSquare2 className="h-4 w-4" />,
+    },
+    {
+      title: 'Albums',
+      href: '/admin/albums',
+      icon: <DiscAlbum className="h-4 w-4" />,
+    },
+    {
+      title: 'Categories (Moods)',
       href: '/admin/categories',
       icon: <Layers className="h-4 w-4" />,
-      disabled: true,
     },
     {
       title: 'Languages',
       href: '/admin/languages',
       icon: <Globe className="h-4 w-4" />,
-      disabled: true,
     },
     {
       title: 'Playlists',
       href: '/admin/playlists',
       icon: <ListMusic className="h-4 w-4" />,
-      disabled: true,
     },
     {
       title: 'Themes',
       href: '/admin/themes',
       icon: <Palette className="h-4 w-4" />,
-      disabled: true,
     },
     {
       title: 'Settings',
       href: '/admin/settings',
       icon: <Settings className="h-4 w-4" />,
-      disabled: true,
+    },
+    {
+      title: 'Activity Logs',
+      href: '/admin/logs',
+      icon: <History className="h-4 w-4" />,
     },
   ];
 
@@ -91,30 +124,15 @@ export function AdminSidebar({ isOpen = false, onClose }: AdminSidebarProps) {
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex flex-col h-full justify-between">
-          <nav aria-label="Admin Navigation" className="space-y-1.5">
-            <div className="px-3 py-2 text-[11px] font-bold tracking-wider text-zinc-500 uppercase">
-              Management Portal
+        <div className="flex flex-col h-full justify-between overflow-y-auto custom-scrollbar">
+          <nav aria-label="Admin Navigation" className="space-y-1">
+            <div className="px-3 py-2 text-[11px] font-bold tracking-wider text-zinc-500 uppercase flex items-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+              <span>Management CMS</span>
             </div>
 
             {NAV_ITEMS.map((item) => {
-              if (item.disabled) {
-                return (
-                  <div
-                    key={item.title}
-                    className="flex items-center justify-between rounded-xl px-3 py-2.5 text-xs font-medium text-zinc-500 opacity-60 cursor-not-allowed select-none"
-                  >
-                    <div className="flex items-center gap-3">
-                      {item.icon}
-                      <span>{item.title}</span>
-                    </div>
-                    <span className="flex items-center gap-1 text-[10px] text-zinc-600">
-                      <Lock className="h-3 w-3" />
-                      Step 3+
-                    </span>
-                  </div>
-                );
-              }
+              const isActive = item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href);
 
               return (
                 <Link
@@ -122,8 +140,8 @@ export function AdminSidebar({ isOpen = false, onClose }: AdminSidebarProps) {
                   href={item.href}
                   onClick={onClose}
                   className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all ${
-                    item.active
-                      ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                    isActive
+                      ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30 shadow-md shadow-rose-950/20'
                       : 'text-zinc-400 hover:bg-white/5 hover:text-white'
                   }`}
                 >
@@ -135,12 +153,12 @@ export function AdminSidebar({ isOpen = false, onClose }: AdminSidebarProps) {
           </nav>
 
           {/* Footer note */}
-          <div className="rounded-xl border border-white/5 bg-zinc-900/50 p-3 text-left">
+          <div className="mt-6 rounded-xl border border-white/5 bg-zinc-900/50 p-3 text-left">
             <span className="text-[11px] font-semibold text-zinc-300 block">
-              Mood Admin v1.0
+              Mood CMS Portal
             </span>
-            <span className="text-[10px] text-zinc-500 block mt-0.5">
-              Foundation Active & Secured
+            <span className="text-[10px] text-emerald-400 font-medium block mt-0.5">
+              ● Live Database Connected
             </span>
           </div>
         </div>
