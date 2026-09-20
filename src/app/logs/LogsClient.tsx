@@ -134,8 +134,8 @@ export function LogsClient({ logs }: LogsClientProps) {
                           {log.status}
                         </span>
                       </td>
-                      <td className="p-4 text-zinc-400 text-[11px] max-w-xs truncate">
-                        {formatLogDetailsSummary(log.details)}
+                      <td className="p-4 text-zinc-400 text-[11px] max-w-md">
+                        <p className="line-clamp-2">{formatLogDetailsSummary(log.details)}</p>
                       </td>
                       <td className="p-4 text-right">
                         <button
