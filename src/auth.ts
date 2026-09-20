@@ -11,6 +11,7 @@ declare module 'next-auth' {
     user: {
       id: string;
       isAdmin: boolean;
+      isSuspended: boolean;
       status: UserStatusType;
     } & DefaultSession['user'];
   }
@@ -79,6 +80,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (dbUser) {
             session.user.id = dbUser.id;
             session.user.isAdmin = dbUser.isAdmin;
+            session.user.isSuspended = dbUser.isSuspended || false;
             session.user.status = dbUser.status as UserStatusType;
           }
         } catch (err) {

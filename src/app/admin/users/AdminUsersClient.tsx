@@ -14,6 +14,9 @@ import {
   ArrowLeft,
   Search,
   UserCheck,
+  Ban,
+  Trash2,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   getUsersListAction,
@@ -21,6 +24,9 @@ import {
   rejectUserAction,
   revokeUserAction,
   reconsiderUserAction,
+  suspendUserAction,
+  unsuspendUserAction,
+  deleteUserAction,
 } from '@/app/actions/users';
 
 interface UserRecord {
@@ -29,6 +35,7 @@ interface UserRecord {
   name: string | null;
   image: string | null;
   isAdmin: boolean;
+  isSuspended?: boolean;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   requestedAt: string | Date;
   reviewedAt: string | Date | null;
@@ -36,6 +43,9 @@ interface UserRecord {
 }
 
 type TabType = 'pending' | 'approved' | 'rejected';
+
+const ADMIN_TOOLTIP =
+  'Admin accounts cannot be modified, suspended, or deleted — including by themselves.';
 
 export function AdminUsersClient() {
   const [users, setUsers] = useState<UserRecord[]>([]);
@@ -178,6 +188,70 @@ export function AdminUsersClient() {
     }
   };
 
+  const handleSuspend = async (userId: string, email: string) => {
+    if (!confirm(`Are you sure you want to suspend user ${email}?`)) return;
+
+    setActionUserId(userId);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const res = await suspendUserAction(userId);
+      if (res.success) {
+        setSuccessMessage(`Suspended account for ${email}.`);
+        await loadUsers();
+      } else {
+        setErrorMessage(res.error || 'Failed to suspend user.');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Action failed.';
+      setErrorMessage(msg);
+    } finally {
+      setActionUserId(null);
+    }
+  };
+
+  const handleUnsuspend = async (userId: string, email: string) => {
+    setActionUserId(userId);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const res = await unsuspendUserAction(userId);
+      if (res.success) {
+        setSuccessMessage(`Reactivated account for ${email}.`);
+        await loadUsers();
+      } else {
+        setErrorMessage(res.error || 'Failed to unsuspend user.');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Action failed.';
+      setErrorMessage(msg);
+    } finally {
+      setActionUserId(null);
+    }
+  };
+
+  const handleDelete = async (userId: string, email: string) => {
+    if (!confirm(`CRITICAL WARNING: Are you sure you want to permanently DELETE user ${email} and ALL their documents? This action cannot be undone.`)) return;
+
+    setActionUserId(userId);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const res = await deleteUserAction(userId);
+      if (res.success) {
+        setSuccessMessage(`Permanently deleted user ${email}.`);
+        await loadUsers();
+      } else {
+        setErrorMessage(res.error || 'Failed to delete user.');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Action failed.';
+      setErrorMessage(msg);
+    } finally {
+      setActionUserId(null);
+    }
+  };
+
   const pendingUsers = users.filter((u) => u.status === 'PENDING');
   const approvedUsers = users.filter((u) => u.status === 'APPROVED');
   const rejectedUsers = users.filter((u) => u.status === 'REJECTED');
@@ -196,7 +270,7 @@ export function AdminUsersClient() {
   );
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 p-4 sm:p-6 lg:p-8">
+    <div className="max-w-6xl mx-auto space-y-8 p-4 sm:p-6 lg:p-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-6">
         <div className="flex items-center gap-3">
@@ -209,10 +283,10 @@ export function AdminUsersClient() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
               <Users className="h-7 w-7 text-blue-400" />
-              Access Request Portal
+              Access Request & User Portal
             </h1>
             <p className="text-sm text-zinc-400 mt-1">
-              Review, approve, or reject user access requests for DocVault.
+              Review access requests, manage user permissions, and enforce administrative security policy.
             </p>
           </div>
         </div>
@@ -312,8 +386,8 @@ export function AdminUsersClient() {
                 <tr>
                   <th className="p-4">User</th>
                   <th className="p-4">Email</th>
+                  <th className="p-4">Status</th>
                   <th className="p-4">Requested At</th>
-                  <th className="p-4">Reviewed Info</th>
                   <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -341,17 +415,27 @@ export function AdminUsersClient() {
                       )}
                     </td>
                     <td className="p-4 font-mono text-zinc-300">{user.email}</td>
-                    <td className="p-4 text-zinc-400 text-[11px]">
-                      {new Date(user.requestedAt).toLocaleString()}
-                    </td>
-                    <td className="p-4 text-zinc-400 text-[11px]">
-                      {user.reviewedAt ? (
-                        <span>
-                          {new Date(user.reviewedAt).toLocaleDateString()} by {user.reviewedBy || 'admin'}
+                    <td className="p-4">
+                      {user.isSuspended ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 border border-rose-500/20 px-2.5 py-0.5 text-[10px] font-bold text-rose-400">
+                          <ShieldAlert className="h-3 w-3" /> SUSPENDED
                         </span>
                       ) : (
-                        <span className="text-zinc-600">Pending Review</span>
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                            user.status === 'APPROVED'
+                              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                              : user.status === 'REJECTED'
+                              ? 'bg-rose-500/10 border border-rose-500/20 text-rose-400'
+                              : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
+                          }`}
+                        >
+                          {user.status}
+                        </span>
                       )}
+                    </td>
+                    <td className="p-4 text-zinc-400 text-[11px]">
+                      {new Date(user.requestedAt).toLocaleString()}
                     </td>
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -360,8 +444,9 @@ export function AdminUsersClient() {
                             <button
                               type="button"
                               onClick={() => handleApprove(user.id, user.email)}
-                              disabled={actionUserId === user.id}
-                              className="inline-flex h-8 items-center justify-center gap-1 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50 transition-all cursor-pointer"
+                              disabled={actionUserId === user.id || user.isAdmin}
+                              title={user.isAdmin ? ADMIN_TOOLTIP : undefined}
+                              className="inline-flex h-8 items-center justify-center gap-1 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
                             >
                               <CheckCircle2 className="h-3.5 w-3.5" />
                               <span>Approve</span>
@@ -369,8 +454,9 @@ export function AdminUsersClient() {
                             <button
                               type="button"
                               onClick={() => handleReject(user.id, user.email)}
-                              disabled={actionUserId === user.id}
-                              className="inline-flex h-8 items-center justify-center gap-1 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 text-xs font-semibold text-rose-400 hover:bg-rose-500 hover:text-white disabled:opacity-50 transition-all cursor-pointer"
+                              disabled={actionUserId === user.id || user.isAdmin}
+                              title={user.isAdmin ? ADMIN_TOOLTIP : undefined}
+                              className="inline-flex h-8 items-center justify-center gap-1 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 text-xs font-semibold text-rose-400 hover:bg-rose-500 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
                             >
                               <XCircle className="h-3.5 w-3.5" />
                               <span>Reject</span>
@@ -379,28 +465,66 @@ export function AdminUsersClient() {
                         )}
 
                         {activeTab === 'approved' && (
-                          <button
-                            type="button"
-                            onClick={() => handleRevoke(user.id, user.email)}
-                            disabled={actionUserId === user.id || user.isAdmin}
-                            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 text-xs font-semibold text-rose-400 hover:bg-rose-500 hover:text-white disabled:opacity-50 transition-all cursor-pointer"
-                          >
-                            <XCircle className="h-3.5 w-3.5" />
-                            <span>Revoke Access</span>
-                          </button>
+                          <>
+                            {user.isSuspended ? (
+                              <button
+                                type="button"
+                                onClick={() => handleUnsuspend(user.id, user.email)}
+                                disabled={actionUserId === user.id || user.isAdmin}
+                                title={user.isAdmin ? ADMIN_TOOLTIP : undefined}
+                                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 text-xs font-semibold text-emerald-400 hover:bg-emerald-500 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                <span>Unsuspend</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleSuspend(user.id, user.email)}
+                                disabled={actionUserId === user.id || user.isAdmin}
+                                title={user.isAdmin ? ADMIN_TOOLTIP : undefined}
+                                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 text-xs font-semibold text-amber-400 hover:bg-amber-500 hover:text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                              >
+                                <Ban className="h-3.5 w-3.5" />
+                                <span>Suspend</span>
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => handleRevoke(user.id, user.email)}
+                              disabled={actionUserId === user.id || user.isAdmin}
+                              title={user.isAdmin ? ADMIN_TOOLTIP : undefined}
+                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 text-xs font-semibold text-rose-400 hover:bg-rose-500 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                            >
+                              <XCircle className="h-3.5 w-3.5" />
+                              <span>Revoke</span>
+                            </button>
+                          </>
                         )}
 
                         {activeTab === 'rejected' && (
                           <button
                             type="button"
                             onClick={() => handleReconsider(user.id, user.email)}
-                            disabled={actionUserId === user.id}
-                            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 text-xs font-semibold text-amber-400 hover:bg-amber-500 hover:text-zinc-950 disabled:opacity-50 transition-all cursor-pointer"
+                            disabled={actionUserId === user.id || user.isAdmin}
+                            title={user.isAdmin ? ADMIN_TOOLTIP : undefined}
+                            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 text-xs font-semibold text-amber-400 hover:bg-amber-500 hover:text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
                           >
                             <RotateCcw className="h-3.5 w-3.5" />
                             <span>Reconsider</span>
                           </button>
                         )}
+
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(user.id, user.email)}
+                          disabled={actionUserId === user.id || user.isAdmin}
+                          title={user.isAdmin ? ADMIN_TOOLTIP : undefined}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     </td>
                   </tr>

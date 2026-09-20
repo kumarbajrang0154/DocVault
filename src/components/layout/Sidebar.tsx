@@ -13,6 +13,7 @@ import {
   Lock,
   Users,
   Palette,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 interface SidebarItem {
@@ -69,7 +70,23 @@ export function Sidebar({ isOpen = false, onClose, isAdmin = false }: SidebarPro
       href: '/admin/branding',
       icon: <Palette className="h-4 w-4 text-pink-400" />,
     });
+    NAV_ITEMS.push({
+      title: 'System Audit Logs',
+      href: '/admin/logs',
+      icon: <FileSpreadsheet className="h-4 w-4 text-emerald-400" />,
+    });
   }
+
+  // Find single best match (longest matching href) to ensure exactly ONE item is active
+  const matchingItems = NAV_ITEMS.filter((item) => {
+    if (item.href === '/') return pathname === '/';
+    return pathname === item.href || pathname.startsWith(`${item.href}/`);
+  });
+
+  const activeItem = matchingItems.reduce<SidebarItem | null>((best, item) => {
+    if (!best) return item;
+    return item.href.length > best.href.length ? item : best;
+  }, null);
 
   return (
     <>
@@ -95,10 +112,7 @@ export function Sidebar({ isOpen = false, onClose, isAdmin = false }: SidebarPro
             </div>
 
             {NAV_ITEMS.map((item) => {
-              const isActive =
-                item.href === '/'
-                  ? pathname === '/'
-                  : pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const isActive = activeItem?.href === item.href;
 
               return (
                 <Link

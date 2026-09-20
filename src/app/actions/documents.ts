@@ -8,56 +8,56 @@ import { uploadDocumentToCloudinary, deleteDocumentFromCloudinary } from '@/lib/
 import { logActivity } from '@/lib/activityLog';
 
 export async function uploadDocumentAction(formData: FormData) {
-  const session = await requireAuth();
-  const userId = session.user.id;
-
-  const file = formData.get('file') as File | null;
-  const title = (formData.get('title') as string)?.trim();
-  const category = (formData.get('category') as string)?.trim();
-  const rawTags = (formData.get('tags') as string)?.trim() || '';
-  const notes = (formData.get('notes') as string)?.trim() || null;
-  const expiryDateRaw = formData.get('expiryDate') as string | null;
-
-  if (!file || file.size === 0) {
-    return { success: false, error: 'Please select a document file to upload.' };
-  }
-
-  if (!title) {
-    return { success: false, error: 'Document title is required.' };
-  }
-
-  if (!category) {
-    return { success: false, error: 'Category selection is required.' };
-  }
-
-  const MAX_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
-  if (file.size > MAX_SIZE_BYTES) {
-    return { success: false, error: 'File size exceeds the 15MB limit.' };
-  }
-
-  const allowedTypes = [
-    'application/pdf',
-    'image/jpeg',
-    'image/jpg',
-    'image/png',
-    'image/webp',
-    'image/heic',
-  ];
-
-  if (!allowedTypes.includes(file.type.toLowerCase())) {
-    return {
-      success: false,
-      error: 'Invalid file type. Only PDF documents and standard images are allowed.',
-    };
-  }
-
-  const tags = rawTags
-    ? rawTags.split(',').map((t) => t.trim()).filter(Boolean)
-    : [];
-
-  const expiryDate = expiryDateRaw ? new Date(expiryDateRaw) : null;
-
   try {
+    const session = await requireAuth();
+    const userId = session.user.id;
+
+    const file = formData.get('file') as File | null;
+    const title = (formData.get('title') as string)?.trim();
+    const category = (formData.get('category') as string)?.trim();
+    const rawTags = (formData.get('tags') as string)?.trim() || '';
+    const notes = (formData.get('notes') as string)?.trim() || null;
+    const expiryDateRaw = formData.get('expiryDate') as string | null;
+
+    if (!file || file.size === 0) {
+      return { success: false, error: 'Please select a document file to upload.' };
+    }
+
+    if (!title) {
+      return { success: false, error: 'Document title is required.' };
+    }
+
+    if (!category) {
+      return { success: false, error: 'Category selection is required.' };
+    }
+
+    const MAX_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
+    if (file.size > MAX_SIZE_BYTES) {
+      return { success: false, error: 'File size exceeds the 15MB limit.' };
+    }
+
+    const allowedTypes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+      'image/heic',
+    ];
+
+    if (!allowedTypes.includes(file.type.toLowerCase())) {
+      return {
+        success: false,
+        error: 'Invalid file type. Only PDF documents and standard images are allowed.',
+      };
+    }
+
+    const tags = rawTags
+      ? rawTags.split(',').map((t) => t.trim()).filter(Boolean)
+      : [];
+
+    const expiryDate = expiryDateRaw ? new Date(expiryDateRaw) : null;
+
     const arrayBuffer = await file.arrayBuffer();
     const rawBuffer = Buffer.from(arrayBuffer);
 
@@ -101,6 +101,7 @@ export async function uploadDocumentAction(formData: FormData) {
     return { success: true, documentId: document.id };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown upload error';
+    await logActivity('DOCUMENT_UPLOAD_FAILED', 'Document', undefined, { error: message }, 'FAILURE');
     console.error('Document upload failed:', error);
     return { success: false, error: message };
   }
@@ -116,19 +117,19 @@ export async function updateDocumentAction(
     expiryDate?: string | null;
   }
 ) {
-  const session = await requireAuth();
-  const userId = session.user.id;
-
-  // Strict ownership check: document must exist and belong to session user
-  const doc = await db.document.findFirst({
-    where: { id, userId },
-  });
-
-  if (!doc) {
-    return { success: false, error: 'Document not found or access denied.' };
-  }
-
   try {
+    const session = await requireAuth();
+    const userId = session.user.id;
+
+    // Strict ownership check: document must exist and belong to session user
+    const doc = await db.document.findFirst({
+      where: { id, userId },
+    });
+
+    if (!doc) {
+      return { success: false, error: 'Document not found or access denied.' };
+    }
+
     const expiryDate = data.expiryDate ? new Date(data.expiryDate) : null;
 
     const updated = await db.document.update({
@@ -157,24 +158,25 @@ export async function updateDocumentAction(
     return { success: true, document: updated };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown update error';
+    await logActivity('DOCUMENT_UPDATE_FAILED', 'Document', id, { error: message }, 'FAILURE');
     return { success: false, error: message };
   }
 }
 
 export async function deleteDocumentAction(id: string) {
-  const session = await requireAuth();
-  const userId = session.user.id;
-
-  // Strict ownership check
-  const doc = await db.document.findFirst({
-    where: { id, userId },
-  });
-
-  if (!doc) {
-    return { success: false, error: 'Document not found or access denied.' };
-  }
-
   try {
+    const session = await requireAuth();
+    const userId = session.user.id;
+
+    // Strict ownership check
+    const doc = await db.document.findFirst({
+      where: { id, userId },
+    });
+
+    if (!doc) {
+      return { success: false, error: 'Document not found or access denied.' };
+    }
+
     // 1. Delete file from Cloudinary private storage
     await deleteDocumentFromCloudinary(doc.fileKey);
 
@@ -193,6 +195,7 @@ export async function deleteDocumentAction(id: string) {
     return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown deletion error';
+    await logActivity('DOCUMENT_DELETE_FAILED', 'Document', id, { error: message }, 'FAILURE');
     return { success: false, error: message };
   }
 }
@@ -219,6 +222,7 @@ export async function updateUserSettingsAction(reminderThresholds: number[]) {
     return { success: true, reminderThresholds: settings.reminderThresholds };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to update settings';
+    await logActivity('SETTINGS_UPDATE_FAILED', 'UserSettings', undefined, { error: message }, 'FAILURE');
     return { success: false, error: message };
   }
 }

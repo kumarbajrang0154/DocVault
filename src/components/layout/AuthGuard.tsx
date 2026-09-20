@@ -3,6 +3,7 @@ import { auth } from '@/auth';
 import { DocVaultLoginView } from './DocVaultLoginView';
 import { RequestPendingView } from './RequestPendingView';
 import { RequestRejectedView } from './RequestRejectedView';
+import { RequestSuspendedView } from './RequestSuspendedView';
 import { AppLayout } from './AppLayout';
 
 export async function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -10,6 +11,11 @@ export async function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!session?.user) {
     return <DocVaultLoginView />;
+  }
+
+  // Admins cannot be suspended
+  if (session.user.isSuspended && !session.user.isAdmin) {
+    return <RequestSuspendedView userEmail={session.user.email} />;
   }
 
   if (session.user.status === 'PENDING') {

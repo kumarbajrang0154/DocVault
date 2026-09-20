@@ -1,11 +1,13 @@
 import { db } from '@/lib/db';
 import { getAuthSession } from '@/lib/authGuard';
+import { ActivityStatus } from '@prisma/client';
 
 export async function logActivity(
   action: string,
   entityType: string,
   entityId?: string,
-  details?: Record<string, unknown> | string
+  details?: Record<string, unknown> | string,
+  status: ActivityStatus = 'SUCCESS'
 ) {
   try {
     const session = await getAuthSession();
@@ -21,6 +23,7 @@ export async function logActivity(
         entityType,
         entityId: entityId || null,
         details: detailString || null,
+        status,
       },
     });
   } catch (error) {
