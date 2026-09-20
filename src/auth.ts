@@ -87,9 +87,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         // d. Email not authorized -> deny sign-in
+        console.warn(`[DocVault OAuth SignIn Warning] Unauthorized email attempt: ${email}`);
         return false;
       } catch (err) {
-        console.error('Error during Google OAuth sign-in allowlist check:', err);
+        console.error('[DocVault OAuth SignIn Error] Detailed database error during authorization check:', {
+          email,
+          message: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+        });
         return false;
       }
     },
@@ -97,13 +102,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async session({ session }) {
       if (session.user && session.user.email) {
         const email = session.user.email.toLowerCase();
-        const dbUser = await db.user.findUnique({
-          where: { email },
-        });
+        try {
+          const dbUser = await db.user.findUnique({
+            where: { email },
+          });
 
-        if (dbUser) {
-          session.user.id = dbUser.id;
-          session.user.isAdmin = dbUser.isAdmin;
+          if (dbUser) {
+            session.user.id = dbUser.id;
+            session.user.isAdmin = dbUser.isAdmin;
+          }
+        } catch (err) {
+          console.error('[DocVault Session Error] Detailed database error fetching user profile:', {
+            email,
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+          });
         }
       }
       return session;
