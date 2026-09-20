@@ -80,7 +80,7 @@ function SettingsContent() {
       setCronResult(
         `Cron executed successfully! Processed ${data.processed || 0} expiring document(s).`
       );
-    } catch (err) {
+    } catch (_err) {
       setCronResult('Failed to execute test cron job.');
     } finally {
       setIsTestingCron(false);

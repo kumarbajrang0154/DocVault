@@ -61,7 +61,7 @@ export async function getSiteBrandingAction() {
     }
 
     return branding;
-  } catch (error) {
+  } catch (_err) {
     console.warn('[Branding] DB query failed, using fallback branding values.');
     return DEFAULT_BRANDING;
   }

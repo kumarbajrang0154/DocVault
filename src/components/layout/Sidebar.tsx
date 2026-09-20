@@ -83,7 +83,7 @@ export function Sidebar({ isOpen = false, onClose, isAdmin = false }: SidebarPro
 
       {/* Sidebar Panel */}
       <aside
-        className={`fixed top-16 bottom-0 left-0 z-40 w-64 border-r border-white/10 bg-zinc-950/95 p-4 transition-transform lg:static lg:translate-x-0 ${
+        className={`fixed top-16 bottom-0 left-0 z-40 w-64 shrink-0 border-r border-white/10 bg-zinc-950/95 p-4 transition-transform lg:static lg:h-full lg:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

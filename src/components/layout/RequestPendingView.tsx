@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { signOut } from 'next-auth/react';
-import { Clock, LogOut, ShieldAlert } from 'lucide-react';
+import { Clock, LogOut } from 'lucide-react';
 
 interface RequestPendingViewProps {
   userEmail?: string | null;

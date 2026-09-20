@@ -14,7 +14,7 @@ export function AdminHeaderWrapper({ session, children }: AdminHeaderWrapperProp
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
+    <div className="flex h-screen flex-col overflow-hidden bg-zinc-950 text-zinc-100">
       <AdminHeader
         userEmail={session.user?.email}
         userName={session.user?.name}
@@ -22,7 +22,7 @@ export function AdminHeaderWrapper({ session, children }: AdminHeaderWrapperProp
         onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
       />
 
-      <div className="flex flex-1">
+      <div className="flex flex-1 overflow-hidden">
         <AdminSidebar
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}

@@ -61,8 +61,29 @@ export default function AdminUsersPage() {
   }, []);
 
   useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    let isMounted = true;
+    getUsersListAction()
+      .then((data) => {
+        if (isMounted) {
+          setUsers(data as unknown as UserRecord[]);
+        }
+      })
+      .catch((err: unknown) => {
+        if (isMounted) {
+          const msg = err instanceof Error ? err.message : 'Failed to load user access requests.';
+          setErrorMessage(msg);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleApprove = async (userId: string, email: string) => {
     setActionUserId(userId);

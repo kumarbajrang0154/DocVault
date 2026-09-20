@@ -14,7 +14,7 @@ export function AppLayout({ session, children }: AppLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 selection:bg-blue-500/30 selection:text-white">
+    <div className="flex h-screen flex-col overflow-hidden bg-zinc-950 text-zinc-100 selection:bg-blue-500/30 selection:text-white">
       <Header
         userEmail={session.user?.email}
         userName={session.user?.name}
@@ -22,7 +22,7 @@ export function AppLayout({ session, children }: AppLayoutProps) {
         onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
       />
 
-      <div className="flex flex-1">
+      <div className="flex flex-1 overflow-hidden">
         <Sidebar
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
