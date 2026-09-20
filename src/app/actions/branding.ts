@@ -18,7 +18,9 @@ function configureCloudinary() {
       api_secret: apiSecret,
       secure: true,
     });
+    return true;
   }
+  return false;
 }
 
 const DEFAULT_BRANDING = {
@@ -128,7 +130,14 @@ export async function updateSiteBrandingAction(data: {
 
 export async function uploadLogoAction(formData: FormData) {
   await requireAdmin();
-  configureCloudinary();
+
+  const isConfigured = configureCloudinary();
+  if (!isConfigured) {
+    return {
+      success: false,
+      error: 'Cloudinary environment variables (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET) are not configured.',
+    };
+  }
 
   const file = formData.get('file') as File | null;
   if (!file || file.size === 0) {
