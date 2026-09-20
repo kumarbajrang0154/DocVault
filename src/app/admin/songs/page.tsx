@@ -616,22 +616,22 @@ export default function AdminSongsPage() {
 
           {/* Reference Source URL */}
           <div>
-            <label className="block text-xs font-semibold text-cyan-400 mb-1">Source / Reference URL (YouTube or Discovery URL)</label>
+            <label className="block text-xs font-semibold text-cyan-400 mb-1">Source / Reference URL</label>
             <input
               type="url"
-              placeholder="https://www.youtube.com/watch?v=... (Metadata reference only)"
+              placeholder="https://www.youtube.com/watch?v=..."
               value={formData.sourceUrl}
               onChange={(e) => setFormData({ ...formData, sourceUrl: e.target.value })}
               className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:border-cyan-500 focus:outline-none font-mono"
             />
             <span className="text-[11px] text-zinc-500 mt-1 block">
-              Reference metadata link. Will NOT be passed to audio player or download button.
+              Where this song was discovered or referenced.
             </span>
           </div>
 
           {/* Authorized Stream URL */}
           <div>
-            <label className="block text-xs font-semibold text-emerald-400 mb-1">Authorized Audio Stream URL (.mp3 / CDN)</label>
+            <label className="block text-xs font-semibold text-emerald-400 mb-1">Authorized Stream URL</label>
             <input
               type="url"
               placeholder="https://cdn.example.com/audio/song.mp3"
@@ -640,13 +640,13 @@ export default function AdminSongsPage() {
               className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:border-emerald-500 focus:outline-none font-mono"
             />
             <span className="text-[11px] text-zinc-500 mt-1 block">
-              Actual playable HTML5 audio stream URL used by Mood player.
+              Direct URL to an audio resource that Mood is authorized to stream.
             </span>
           </div>
 
           {/* Authorized Download URL */}
           <div>
-            <label className="block text-xs font-semibold text-purple-400 mb-1">Authorized Download File URL (Optional)</label>
+            <label className="block text-xs font-semibold text-purple-400 mb-1">Authorized Download URL</label>
             <input
               type="url"
               placeholder="https://cdn.example.com/audio/song.mp3"
@@ -655,7 +655,7 @@ export default function AdminSongsPage() {
               className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:border-purple-500 focus:outline-none font-mono"
             />
             <span className="text-[11px] text-zinc-500 mt-1 block">
-              Actual downloadable audio file URL streamed by server attachment download endpoint.
+              Direct URL to an audio file that Mood is authorized to distribute.
             </span>
           </div>
 

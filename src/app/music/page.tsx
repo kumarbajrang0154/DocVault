@@ -321,7 +321,7 @@ export default function MusicPage() {
                       Track {currentTrackIndex + 1} of {songs.length}
                     </span>
                     {!currentSong?.hasPlayableAudio && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-white/10">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
                         ⚪ Audio Source Unavailable
                       </span>
                     )}
@@ -340,9 +340,17 @@ export default function MusicPage() {
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:underline mt-2"
                     >
-                      <span>Reference Source</span>
                       <ExternalLink className="h-3 w-3" />
+                      <span>Reference Source</span>
                     </a>
+                  )}
+
+                  {/* Audio Unavailable Notice Banner */}
+                  {!currentSong?.hasPlayableAudio && (
+                    <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-2.5 text-xs text-amber-300 flex items-center justify-center sm:justify-start gap-2">
+                      <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />
+                      <span>No playable audio source has been configured for this song.</span>
+                    </div>
                   )}
                 </div>
 
@@ -372,11 +380,17 @@ export default function MusicPage() {
                   value={currentTime}
                   onChange={handleSeek}
                   disabled={!currentSong?.hasPlayableAudio}
-                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-rose-500 disabled:opacity-40"
+                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-rose-500 disabled:opacity-40 disabled:cursor-not-allowed"
                 />
                 <div className="flex justify-between text-[11px] text-zinc-400 font-mono">
-                  <span>{formatTime(currentTime)}</span>
-                  <span>{formatTime(duration)}</span>
+                  {currentSong?.hasPlayableAudio ? (
+                    <>
+                      <span>{formatTime(currentTime)}</span>
+                      <span>{formatTime(duration)}</span>
+                    </>
+                  ) : (
+                    <span className="text-zinc-500 italic">Audio unavailable</span>
+                  )}
                 </div>
               </div>
 
@@ -386,7 +400,7 @@ export default function MusicPage() {
                   <button
                     onClick={toggleMute}
                     disabled={!currentSong?.hasPlayableAudio}
-                    className="p-2 text-zinc-400 hover:text-white disabled:opacity-40"
+                    className="p-2 text-zinc-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {isMuted ? <VolumeX className="h-5 w-5 text-rose-400" /> : <Volume2 className="h-5 w-5" />}
                   </button>
@@ -398,7 +412,7 @@ export default function MusicPage() {
                     value={isMuted ? 0 : volume}
                     onChange={handleVolumeChange}
                     disabled={!currentSong?.hasPlayableAudio}
-                    className="w-20 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-rose-500 disabled:opacity-40"
+                    className="w-20 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-rose-500 disabled:opacity-40 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -413,7 +427,8 @@ export default function MusicPage() {
                   <button
                     onClick={togglePlay}
                     disabled={!currentSong?.hasPlayableAudio}
-                    className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-600 text-white shadow-lg shadow-rose-950/50 hover:bg-rose-500 disabled:opacity-50 transition-all"
+                    title={currentSong?.hasPlayableAudio ? (isPlaying ? 'Pause' : 'Play') : 'Audio source unavailable'}
+                    className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-600 text-white shadow-lg shadow-rose-950/50 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500 transition-all"
                   >
                     {isPlaying ? <Pause className="h-6 w-6 fill-current" /> : <Play className="h-6 w-6 fill-current ml-0.5" />}
                   </button>
