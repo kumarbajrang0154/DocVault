@@ -93,15 +93,36 @@ export interface SongFormData {
   categoryIds: string[];
 }
 
-function validateOptionalUrl(url?: string | null, fieldName: string = 'URL') {
+export function isYouTubeUrl(url?: string | null): boolean {
+  if (!url) return false;
+  const lower = url.trim().toLowerCase();
+  return lower.includes('youtube.com') || lower.includes('youtu.be') || lower.includes('m.youtube.com');
+}
+
+function validateOptionalUrl(
+  url?: string | null,
+  fieldName: string = 'URL',
+  options?: { rejectYouTube?: boolean }
+) {
   if (!url || !url.trim()) return;
+  const trimmed = url.trim();
+
   try {
-    const parsed = new URL(url.trim());
+    const parsed = new URL(trimmed);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       throw new Error(`${fieldName} must start with http:// or https://`);
     }
-  } catch {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message.includes('must start with')) {
+      throw err;
+    }
     throw new Error(`Invalid ${fieldName} format.`);
+  }
+
+  if (options?.rejectYouTube && isYouTubeUrl(trimmed)) {
+    throw new Error(
+      `${fieldName} cannot be a YouTube link. Paste a direct audio file URL (e.g. ending in .mp3/.m4a) from your own authorized storage.`
+    );
   }
 }
 
@@ -121,8 +142,8 @@ export async function createSong(data: SongFormData) {
   const legacyAudioUrl = data.audioUrl?.trim() || streamUrl || sourceUrl || null;
 
   validateOptionalUrl(sourceUrl, 'Source URL');
-  validateOptionalUrl(streamUrl, 'Authorized Stream URL');
-  validateOptionalUrl(downloadUrl, 'Authorized Download URL');
+  validateOptionalUrl(streamUrl, 'Authorized Stream URL', { rejectYouTube: true });
+  validateOptionalUrl(downloadUrl, 'Authorized Download URL', { rejectYouTube: true });
 
   const song = await db.song.create({
     data: {
@@ -170,8 +191,8 @@ export async function updateSong(id: string, data: SongFormData) {
   const legacyAudioUrl = data.audioUrl?.trim() || streamUrl || sourceUrl || null;
 
   validateOptionalUrl(sourceUrl, 'Source URL');
-  validateOptionalUrl(streamUrl, 'Authorized Stream URL');
-  validateOptionalUrl(downloadUrl, 'Authorized Download URL');
+  validateOptionalUrl(streamUrl, 'Authorized Stream URL', { rejectYouTube: true });
+  validateOptionalUrl(downloadUrl, 'Authorized Download URL', { rejectYouTube: true });
 
   // Re-link categories
   await db.songCategory.deleteMany({

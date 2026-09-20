@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { getSongs, createSong, updateSong, toggleSongPublish, toggleSongDownload, deleteSong } from '@/app/admin/actions/songs';
+import { getSongs, createSong, updateSong, toggleSongPublish, toggleSongDownload, deleteSong, isYouTubeUrl } from '@/app/admin/actions/songs';
 import { getLanguages } from '@/app/admin/actions/languages';
 import { getCategories } from '@/app/admin/actions/categories';
 import { getArtists } from '@/app/admin/actions/artists';
@@ -86,6 +86,7 @@ export default function AdminSongsPage() {
     categoryIds: [] as string[],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [modalError, setModalError] = useState('');
 
   // Delete state
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -187,6 +188,7 @@ export default function AdminSongsPage() {
       categoryIds: categories.slice(0, 1).map((c) => c.id),
     });
     setErrorMessage('');
+    setModalError('');
     setIsModalOpen(true);
   };
 
@@ -208,6 +210,7 @@ export default function AdminSongsPage() {
       categoryIds: item.categories.map((c) => c.category.id),
     });
     setErrorMessage('');
+    setModalError('');
     setIsModalOpen(true);
   };
 
@@ -225,6 +228,7 @@ export default function AdminSongsPage() {
     e.preventDefault();
     setIsSubmitting(true);
     setErrorMessage('');
+    setModalError('');
     setSuccessMessage('');
 
     try {
@@ -238,7 +242,9 @@ export default function AdminSongsPage() {
       setIsModalOpen(false);
       reloadSongs();
     } catch (err: unknown) {
-      setErrorMessage((err as Error).message);
+      const msg = (err as Error).message;
+      setModalError(msg);
+      setErrorMessage(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -548,6 +554,12 @@ export default function AdminSongsPage() {
         title={editingItem ? 'Edit Song Track' : 'Add New Song Track'}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
+          {modalError && (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-semibold text-rose-300">
+              {modalError}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-zinc-300 mb-1">Song Title</label>
@@ -637,11 +649,21 @@ export default function AdminSongsPage() {
               placeholder="https://cdn.example.com/audio/song.mp3"
               value={formData.streamUrl}
               onChange={(e) => setFormData({ ...formData, streamUrl: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:border-emerald-500 focus:outline-none font-mono"
+              className={`w-full rounded-xl border px-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:outline-none font-mono ${
+                isYouTubeUrl(formData.streamUrl) || modalError.includes('Authorized Stream URL')
+                  ? 'border-rose-500 bg-rose-950/20 focus:border-rose-500'
+                  : 'border-white/10 bg-zinc-950 focus:border-emerald-500'
+              }`}
             />
-            <span className="text-[11px] text-zinc-500 mt-1 block">
-              Direct URL to an audio resource that Mood is authorized to stream.
-            </span>
+            {isYouTubeUrl(formData.streamUrl) || modalError.includes('Authorized Stream URL') ? (
+              <p className="text-[11px] font-semibold text-rose-400 mt-1">
+                Authorized Stream URL cannot be a YouTube link. Paste a direct audio file URL (e.g. ending in .mp3/.m4a) from your own authorized storage.
+              </p>
+            ) : (
+              <span className="text-[11px] text-zinc-500 mt-1 block">
+                Direct URL to an audio resource that Mood is authorized to stream.
+              </span>
+            )}
           </div>
 
           {/* Authorized Download URL */}
@@ -652,11 +674,21 @@ export default function AdminSongsPage() {
               placeholder="https://cdn.example.com/audio/song.mp3"
               value={formData.downloadUrl}
               onChange={(e) => setFormData({ ...formData, downloadUrl: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:border-purple-500 focus:outline-none font-mono"
+              className={`w-full rounded-xl border px-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:outline-none font-mono ${
+                isYouTubeUrl(formData.downloadUrl) || modalError.includes('Authorized Download URL')
+                  ? 'border-rose-500 bg-rose-950/20 focus:border-rose-500'
+                  : 'border-white/10 bg-zinc-950 focus:border-purple-500'
+              }`}
             />
-            <span className="text-[11px] text-zinc-500 mt-1 block">
-              Direct URL to an audio file that Mood is authorized to distribute.
-            </span>
+            {isYouTubeUrl(formData.downloadUrl) || modalError.includes('Authorized Download URL') ? (
+              <p className="text-[11px] font-semibold text-rose-400 mt-1">
+                Authorized Download URL cannot be a YouTube link. Paste a direct audio file URL (e.g. ending in .mp3/.m4a) from your own authorized storage.
+              </p>
+            ) : (
+              <span className="text-[11px] text-zinc-500 mt-1 block">
+                Direct URL to an audio file that Mood is authorized to distribute.
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
