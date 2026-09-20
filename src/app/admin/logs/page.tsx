@@ -6,16 +6,18 @@ import { db } from '@/lib/db';
 import { AdminLogsClient } from './AdminLogsClient';
 
 export default async function AdminLogsPage() {
+  let adminEmail = '';
   try {
-    await requireAdmin();
+    const session = await requireAdmin();
+    adminEmail = session.user.email || '';
   } catch (_err) {
     redirect('/');
   }
 
-  // Fetch all system logs
+  // Fetch initial batch of system logs (NO userId filter - returns all system logs)
   const logs = await db.activityLog.findMany({
     orderBy: { createdAt: 'desc' },
-    take: 200,
+    take: 100,
   });
 
   // Fetch list of users for dropdown filter
@@ -36,7 +38,7 @@ export default async function AdminLogsPage() {
 
   return (
     <AuthGuard>
-      <AdminLogsClient logs={serializableLogs} users={users} />
+      <AdminLogsClient logs={serializableLogs} users={users} currentAdminEmail={adminEmail} />
     </AuthGuard>
   );
 }
