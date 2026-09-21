@@ -9,6 +9,8 @@ interface HeaderProps {
   userEmail?: string | null;
   userName?: string | null;
   userImage?: string | null;
+  logoUrl?: string | null;
+  siteName?: string;
   onToggleSidebar?: () => void;
 }
 
@@ -16,6 +18,8 @@ export function Header({
   userEmail,
   userName,
   userImage,
+  logoUrl,
+  siteName,
   onToggleSidebar,
 }: HeaderProps) {
   const handleSignOut = () => {
@@ -36,14 +40,25 @@ export function Header({
         </button>
 
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-emerald-500 p-0.5 shadow-md group-hover:scale-105 transition-transform">
-            <div className="flex h-full w-full items-center justify-center rounded-[10px] bg-zinc-950">
-              <ShieldCheck className="h-5 w-5 text-blue-400" />
+          {logoUrl ? (
+            <div className="flex h-9 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/5 px-2 py-1 group-hover:scale-105 transition-transform">
+              {/* eslint-disable-next-html-element-suppression */}
+              <img
+                src={logoUrl}
+                alt={siteName || 'DocVault'}
+                className="h-7 w-auto max-w-[120px] object-contain"
+              />
             </div>
-          </div>
+          ) : (
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-emerald-500 p-0.5 shadow-md group-hover:scale-105 transition-transform">
+              <div className="flex h-full w-full items-center justify-center rounded-[10px] bg-zinc-950">
+                <ShieldCheck className="h-5 w-5 text-blue-400" />
+              </div>
+            </div>
+          )}
           <div className="flex flex-col">
             <span className="text-base font-extrabold tracking-tight text-white flex items-center gap-1.5">
-              DocVault
+              {siteName || 'DocVault'}
               <span className="rounded-full bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.2 text-[10px] font-medium text-blue-400">
                 Encrypted
               </span>

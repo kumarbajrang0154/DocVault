@@ -165,6 +165,9 @@ export async function uploadLogoAction(formData: FormData) {
       uploadStream.end(buffer);
     });
 
+    revalidatePath('/', 'layout');
+    revalidatePath('/admin/branding');
+
     return { success: true, logoUrl: result.secure_url };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Logo upload failed';

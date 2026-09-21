@@ -26,9 +26,10 @@ interface SidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
   isAdmin?: boolean;
+  siteName?: string;
 }
 
-export function Sidebar({ isOpen = false, onClose, isAdmin = false }: SidebarProps) {
+export function Sidebar({ isOpen = false, onClose, isAdmin = false, siteName }: SidebarProps) {
   const pathname = usePathname();
 
   const NAV_ITEMS: SidebarItem[] = [
@@ -108,7 +109,7 @@ export function Sidebar({ isOpen = false, onClose, isAdmin = false }: SidebarPro
           <nav aria-label="DocVault Navigation" className="space-y-1">
             <div className="px-3 py-2 text-[11px] font-bold tracking-wider text-zinc-500 uppercase flex items-center gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5 text-blue-400" />
-              <span>Personal Vault</span>
+              <span>{siteName ? `${siteName} Vault` : 'Personal Vault'}</span>
             </div>
 
             {NAV_ITEMS.map((item) => {

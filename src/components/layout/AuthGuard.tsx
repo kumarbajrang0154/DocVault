@@ -5,6 +5,7 @@ import { RequestPendingView } from './RequestPendingView';
 import { RequestRejectedView } from './RequestRejectedView';
 import { RequestSuspendedView } from './RequestSuspendedView';
 import { AppLayout } from './AppLayout';
+import { getSiteBrandingAction } from '@/app/actions/branding';
 
 export async function AuthGuard({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -26,5 +27,7 @@ export async function AuthGuard({ children }: { children: React.ReactNode }) {
     return <RequestRejectedView userEmail={session.user.email} />;
   }
 
-  return <AppLayout session={session}>{children}</AppLayout>;
+  const branding = await getSiteBrandingAction();
+
+  return <AppLayout session={session} branding={branding}>{children}</AppLayout>;
 }

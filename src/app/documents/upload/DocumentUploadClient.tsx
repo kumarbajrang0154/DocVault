@@ -19,6 +19,9 @@ import {
   Trash2,
   X,
   Sparkles,
+  Zap,
+  Sun,
+  Contrast,
 } from 'lucide-react';
 import { uploadDocumentAction } from '@/app/actions/documents';
 import { jsPDF } from 'jspdf';
@@ -32,6 +35,13 @@ const CATEGORIES = [
   'Vehicle',
   'Other',
 ];
+
+interface CurrentCaptureState {
+  rawUrl: string;
+  rotation: number;
+  filter: 'color' | 'bw' | 'enhance';
+  previewUrl: string;
+}
 
 export function DocumentUploadClient() {
   const router = useRouter();
@@ -52,8 +62,13 @@ export function DocumentUploadClient() {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [capturedPages, setCapturedPages] = useState<{ id: string; dataUrl: string; rotation: number }[]>([]);
-  const [currentCapture, setCurrentCapture] = useState<{ dataUrl: string; rotation: number } | null>(null);
+  const [currentCapture, setCurrentCapture] = useState<CurrentCaptureState | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isProcessingFilter, setIsProcessingFilter] = useState(false);
+
+  // Torch / Flashlight state
+  const [isTorchSupported, setIsTorchSupported] = useState(false);
+  const [isTorchOn, setIsTorchOn] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -64,6 +79,8 @@ export function DocumentUploadClient() {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
     }
+    setIsTorchSupported(false);
+    setIsTorchOn(false);
     setIsCameraOpen(false);
     setCurrentCapture(null);
   };
@@ -74,9 +91,29 @@ export function DocumentUploadClient() {
     };
   }, []);
 
+  const toggleTorch = async () => {
+    if (!mediaStreamRef.current) return;
+    const track = mediaStreamRef.current.getVideoTracks()[0];
+    if (!track) return;
+
+    const targetState = !isTorchOn;
+    try {
+      const constraints = {
+        advanced: [{ torch: targetState }],
+      } as unknown as MediaTrackConstraints;
+
+      await track.applyConstraints(constraints);
+      setIsTorchOn(targetState);
+    } catch (err) {
+      console.error('Failed to toggle camera torch constraint:', err);
+    }
+  };
+
   const startCamera = async () => {
     setCameraError(null);
     setCurrentCapture(null);
+    setIsTorchSupported(false);
+    setIsTorchOn(false);
     setIsCameraOpen(true);
 
     try {
@@ -93,6 +130,18 @@ export function DocumentUploadClient() {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
+
+      const track = stream.getVideoTracks()[0];
+      if (track && typeof track.getCapabilities === 'function') {
+        try {
+          const caps = track.getCapabilities() as MediaTrackCapabilities & { torch?: boolean };
+          if ('torch' in caps && Boolean(caps.torch)) {
+            setIsTorchSupported(true);
+          }
+        } catch (_e) {
+          setIsTorchSupported(false);
+        }
+      }
     } catch (err: unknown) {
       const msg =
         err instanceof Error
@@ -100,6 +149,67 @@ export function DocumentUploadClient() {
           : 'Camera access denied or unavailable. Please use regular file upload.';
       setCameraError(msg);
     }
+  };
+
+  const applyFilterAndRotation = (
+    rawUrl: string,
+    rotation: number,
+    filter: 'color' | 'bw' | 'enhance'
+  ): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        if (rotation === 90 || rotation === 270) {
+          canvas.width = img.height;
+          canvas.height = img.width;
+        } else {
+          canvas.width = img.width;
+          canvas.height = img.height;
+        }
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(rawUrl);
+          return;
+        }
+
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate((rotation * Math.PI) / 180);
+        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+
+        if (filter !== 'color') {
+          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imgData.data;
+
+          if (filter === 'bw') {
+            const contrast = 1.35;
+            for (let i = 0; i < data.length; i += 4) {
+              let gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+              gray = (gray - 128) * contrast + 128;
+              gray = Math.min(255, Math.max(0, gray));
+              data[i] = gray;
+              data[i + 1] = gray;
+              data[i + 2] = gray;
+            }
+            ctx.putImageData(imgData, 0, 0);
+          } else if (filter === 'enhance') {
+            const contrast = 1.18;
+            const brightness = 12;
+            for (let i = 0; i < data.length; i += 4) {
+              data[i] = Math.min(255, Math.max(0, (data[i] - 128) * contrast + 128 + brightness));
+              data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * contrast + 128 + brightness));
+              data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * contrast + 128 + brightness));
+            }
+            ctx.putImageData(imgData, 0, 0);
+          }
+        }
+
+        resolve(canvas.toDataURL('image/jpeg', 0.92));
+      };
+      img.src = rawUrl;
+    });
   };
 
   const capturePhoto = () => {
@@ -115,57 +225,61 @@ export function DocumentUploadClient() {
     if (ctx) {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-      setCurrentCapture({ dataUrl, rotation: 0 });
+      setCurrentCapture({
+        rawUrl: dataUrl,
+        rotation: 0,
+        filter: 'color',
+        previewUrl: dataUrl,
+      });
     }
     setIsCapturing(false);
   };
 
-  const handleRotateCurrent = () => {
+  const handleRotateCurrent = async () => {
     if (!currentCapture) return;
+    setIsProcessingFilter(true);
+    const newRotation = (currentCapture.rotation + 90) % 360;
+    const newPreviewUrl = await applyFilterAndRotation(
+      currentCapture.rawUrl,
+      newRotation,
+      currentCapture.filter
+    );
     setCurrentCapture({
       ...currentCapture,
-      rotation: (currentCapture.rotation + 90) % 360,
+      rotation: newRotation,
+      previewUrl: newPreviewUrl,
     });
+    setIsProcessingFilter(false);
+  };
+
+  const handleFilterChange = async (filter: 'color' | 'bw' | 'enhance') => {
+    if (!currentCapture) return;
+    setIsProcessingFilter(true);
+    const newPreviewUrl = await applyFilterAndRotation(
+      currentCapture.rawUrl,
+      currentCapture.rotation,
+      filter
+    );
+    setCurrentCapture({
+      ...currentCapture,
+      filter,
+      previewUrl: newPreviewUrl,
+    });
+    setIsProcessingFilter(false);
   };
 
   const saveCurrentPage = () => {
     if (!currentCapture) return;
 
-    // Apply rotation onto a new canvas if rotated
-    if (currentCapture.rotation !== 0) {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        if (currentCapture.rotation === 90 || currentCapture.rotation === 270) {
-          canvas.width = img.height;
-          canvas.height = img.width;
-        } else {
-          canvas.width = img.width;
-          canvas.height = img.height;
-        }
-
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.translate(canvas.width / 2, canvas.height / 2);
-          ctx.rotate((currentCapture.rotation * Math.PI) / 180);
-          ctx.drawImage(img, -img.width / 2, -img.height / 2);
-
-          const rotatedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-          setCapturedPages((prev) => [
-            ...prev,
-            { id: `page_${Date.now()}_${prev.length}`, dataUrl: rotatedDataUrl, rotation: 0 },
-          ]);
-        }
-        setCurrentCapture(null);
-      };
-      img.src = currentCapture.dataUrl;
-    } else {
-      setCapturedPages((prev) => [
-        ...prev,
-        { id: `page_${Date.now()}_${prev.length}`, dataUrl: currentCapture.dataUrl, rotation: 0 },
-      ]);
-      setCurrentCapture(null);
-    }
+    setCapturedPages((prev) => [
+      ...prev,
+      {
+        id: `page_${Date.now()}_${prev.length}`,
+        dataUrl: currentCapture.previewUrl,
+        rotation: 0,
+      },
+    ]);
+    setCurrentCapture(null);
   };
 
   const deleteCapturedPage = (id: string) => {
@@ -273,11 +387,11 @@ export function DocumentUploadClient() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link
             href="/documents"
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white transition-all"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white transition-all min-h-[40px] min-w-[40px]"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
@@ -292,14 +406,14 @@ export function DocumentUploadClient() {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400">
+        <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400 self-start sm:self-auto">
           <Lock className="h-3.5 w-3.5" />
           <span>AES-256 Encrypted</span>
         </div>
       </div>
 
       {/* Form Card */}
-      <div className="rounded-3xl border border-white/10 bg-zinc-900/80 p-6 sm:p-8 shadow-2xl backdrop-blur-2xl">
+      <div className="rounded-3xl border border-white/10 bg-zinc-900/80 p-5 sm:p-8 shadow-2xl backdrop-blur-2xl">
         {errorMessage && (
           <div className="mb-6 flex items-center gap-3 rounded-2xl border border-rose-500/20 bg-rose-950/30 p-4 text-xs font-semibold text-rose-300">
             <AlertCircle className="h-5 w-5 text-rose-400 shrink-0" />
@@ -317,7 +431,7 @@ export function DocumentUploadClient() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* File Upload / Camera Scan Buttons */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300">
                 Document File (PDF or Image, max 15MB) <span className="text-rose-400">*</span>
               </label>
@@ -325,9 +439,9 @@ export function DocumentUploadClient() {
               <button
                 type="button"
                 onClick={startCamera}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300 transition-all cursor-pointer shadow-sm"
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300 transition-all cursor-pointer shadow-sm min-h-[40px]"
               >
-                <Camera className="h-3.5 w-3.5" />
+                <Camera className="h-4 w-4" />
                 <span>Scan with Camera</span>
               </button>
             </div>
@@ -345,7 +459,7 @@ export function DocumentUploadClient() {
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
                     <FileText className="h-6 w-6" />
                   </div>
-                  <span className="text-sm font-bold text-white">{selectedFile.name}</span>
+                  <span className="text-sm font-bold text-white break-all max-w-full px-2">{selectedFile.name}</span>
                   <span className="text-xs text-zinc-400">
                     {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • {selectedFile.type || 'Document'}
                   </span>
@@ -381,7 +495,7 @@ export function DocumentUploadClient() {
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. Passport - India, Car Insurance Policy"
                 required
-                className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-xs text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-xs text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none min-h-[40px]"
               />
             </div>
 
@@ -393,7 +507,7 @@ export function DocumentUploadClient() {
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-xs text-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-xs text-white focus:border-blue-500 focus:outline-none cursor-pointer min-h-[40px]"
               >
                 {CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
@@ -419,7 +533,7 @@ export function DocumentUploadClient() {
                 value={expiryDate}
                 disabled={noExpiry}
                 onChange={(e) => setExpiryDate(e.target.value)}
-                className={`w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-xs text-white focus:border-blue-500 focus:outline-none cursor-pointer ${
+                className={`w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-xs text-white focus:border-blue-500 focus:outline-none cursor-pointer min-h-[40px] ${
                   noExpiry ? 'opacity-40 cursor-not-allowed' : ''
                 }`}
               />
@@ -432,7 +546,7 @@ export function DocumentUploadClient() {
                     setNoExpiry(e.target.checked);
                     if (e.target.checked) setExpiryDate('');
                   }}
-                  className="rounded border-white/20 bg-zinc-950 text-blue-600 focus:ring-0 cursor-pointer"
+                  className="rounded border-white/20 bg-zinc-950 text-blue-600 focus:ring-0 cursor-pointer h-4 w-4"
                 />
                 <span className="text-xs text-zinc-300 font-medium">
                   This document does not expire (e.g. Birth Certificate, Degree)
@@ -451,7 +565,7 @@ export function DocumentUploadClient() {
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
                 placeholder="e.g. Identity, Official, 2026"
-                className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-xs text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-xs text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none min-h-[40px]"
               />
             </div>
           </div>
@@ -471,10 +585,10 @@ export function DocumentUploadClient() {
           </div>
 
           {/* Submit Action */}
-          <div className="pt-4 border-t border-white/10 flex justify-end gap-3">
+          <div className="pt-4 border-t border-white/10 flex flex-col sm:flex-row justify-end gap-3">
             <Link
               href="/documents"
-              className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-6 text-xs font-semibold text-zinc-300 hover:bg-white/10 hover:text-white"
+              className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-6 text-xs font-semibold text-zinc-300 hover:bg-white/10 hover:text-white min-h-[40px]"
             >
               Cancel
             </Link>
@@ -482,7 +596,7 @@ export function DocumentUploadClient() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 text-xs font-bold text-white shadow-lg shadow-blue-600/25 hover:bg-blue-500 disabled:opacity-50 cursor-pointer"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 text-xs font-bold text-white shadow-lg shadow-blue-600/25 hover:bg-blue-500 disabled:opacity-50 cursor-pointer min-h-[40px]"
             >
               {isSubmitting ? (
                 <>
@@ -502,21 +616,37 @@ export function DocumentUploadClient() {
 
       {/* Camera Scan Modal */}
       {isCameraOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/90 p-4 backdrop-blur-md">
-          <div className="w-full max-w-2xl space-y-6 rounded-3xl border border-white/15 bg-zinc-900/95 p-6 shadow-2xl backdrop-blur-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/90 p-3 sm:p-4 backdrop-blur-md">
+          <div className="w-full max-w-2xl space-y-4 rounded-3xl border border-white/15 bg-zinc-900/95 p-4 sm:p-6 shadow-2xl backdrop-blur-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
             {/* Modal Top Bar */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2 text-white font-bold text-base">
                 <Camera className="h-5 w-5 text-emerald-400" />
                 <span>Camera Document Scanner</span>
               </div>
-              <button
-                type="button"
-                onClick={stopCamera}
-                className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {isTorchSupported && !currentCapture && (
+                  <button
+                    type="button"
+                    onClick={toggleTorch}
+                    className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1 text-xs font-bold transition-all cursor-pointer shadow-md min-h-[36px] ${
+                      isTorchOn
+                        ? 'border-amber-400/50 bg-amber-400/20 text-amber-300'
+                        : 'border-white/15 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                    }`}
+                  >
+                    <Zap className={`h-3.5 w-3.5 ${isTorchOn ? 'fill-amber-400 text-amber-400' : ''}`} />
+                    <span>{isTorchOn ? 'Flash On' : 'Flash Off'}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white transition-all cursor-pointer min-h-[36px]"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             {cameraError ? (
@@ -530,34 +660,89 @@ export function DocumentUploadClient() {
                 <button
                   type="button"
                   onClick={stopCamera}
-                  className="mt-2 inline-flex h-9 items-center justify-center rounded-xl bg-white/10 px-4 text-xs font-bold text-white hover:bg-white/20"
+                  className="mt-2 inline-flex h-9 items-center justify-center rounded-xl bg-white/10 px-4 text-xs font-bold text-white hover:bg-white/20 min-h-[40px]"
                 >
                   Return to Upload Form
                 </button>
               </div>
             ) : currentCapture ? (
-              /* Review / Crop / Rotate Step */
+              /* Review / Filter / Rotate Step */
               <div className="space-y-4">
                 <div className="text-xs text-zinc-300 flex items-center justify-between">
-                  <span className="font-semibold text-emerald-400">Review & Adjust Photo</span>
+                  <span className="font-semibold text-emerald-400">Review & Filter Captured Page</span>
                   <span className="text-zinc-400">Page {capturedPages.length + 1}</span>
                 </div>
 
-                <div className="relative overflow-hidden rounded-2xl border border-white/15 bg-zinc-950 flex items-center justify-center min-h-[300px]">
-                  {/* eslint-disable-next-html-element-suppression */}
-                  <img
-                    src={currentCapture.dataUrl}
-                    alt="Current capture"
-                    className="max-h-[350px] object-contain transition-transform duration-300"
-                    style={{ transform: `rotate(${currentCapture.rotation}deg)` }}
-                  />
+                <div className="relative overflow-hidden rounded-2xl border border-white/15 bg-zinc-950 flex items-center justify-center min-h-[260px] max-h-[360px] p-2">
+                  {isProcessingFilter ? (
+                    <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span>Processing filter...</span>
+                    </div>
+                  ) : (
+                    /* eslint-disable-next-html-element-suppression */
+                    <img
+                      src={currentCapture.previewUrl}
+                      alt="Current capture preview"
+                      className="max-h-[320px] w-auto object-contain rounded-lg transition-all duration-200"
+                    />
+                  )}
                 </div>
 
-                <div className="flex items-center justify-between gap-3 pt-2">
+                {/* Filter Choice Selection Bar */}
+                <div className="space-y-2">
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
+                    Choose Image Effect:
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleFilterChange('color')}
+                      className={`flex flex-col items-center justify-center gap-1 rounded-2xl border p-2.5 text-xs font-bold transition-all cursor-pointer min-h-[48px] ${
+                        currentCapture.filter === 'color'
+                          ? 'border-blue-500 bg-blue-500/20 text-white shadow-md'
+                          : 'border-white/10 bg-zinc-950 text-zinc-400 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Sun className="h-4 w-4 text-amber-400" />
+                      <span>Color (Original)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleFilterChange('bw')}
+                      className={`flex flex-col items-center justify-center gap-1 rounded-2xl border p-2.5 text-xs font-bold transition-all cursor-pointer min-h-[48px] ${
+                        currentCapture.filter === 'bw'
+                          ? 'border-emerald-500 bg-emerald-500/20 text-white shadow-md'
+                          : 'border-white/10 bg-zinc-950 text-zinc-400 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Contrast className="h-4 w-4 text-emerald-400" />
+                      <span>Black & White</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleFilterChange('enhance')}
+                      className={`flex flex-col items-center justify-center gap-1 rounded-2xl border p-2.5 text-xs font-bold transition-all cursor-pointer min-h-[48px] ${
+                        currentCapture.filter === 'enhance'
+                          ? 'border-purple-500 bg-purple-500/20 text-white shadow-md'
+                          : 'border-white/10 bg-zinc-950 text-zinc-400 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <Sparkles className="h-4 w-4 text-purple-400" />
+                      <span>Auto Enhance</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Review Step Control Buttons */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/10">
                   <button
                     type="button"
                     onClick={handleRotateCurrent}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-bold text-zinc-200 hover:bg-white/10 cursor-pointer"
+                    disabled={isProcessingFilter}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-bold text-zinc-200 hover:bg-white/10 cursor-pointer min-h-[40px]"
                   >
                     <RotateCw className="h-4 w-4 text-blue-400" />
                     <span>Rotate 90°</span>
@@ -567,14 +752,14 @@ export function DocumentUploadClient() {
                     <button
                       type="button"
                       onClick={() => setCurrentCapture(null)}
-                      className="h-10 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-semibold text-zinc-400 hover:bg-white/10"
+                      className="h-10 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-semibold text-zinc-400 hover:bg-white/10 min-h-[40px] cursor-pointer"
                     >
                       Retake
                     </button>
                     <button
                       type="button"
                       onClick={saveCurrentPage}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 text-xs font-bold text-white hover:bg-emerald-500 cursor-pointer shadow-md"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 text-xs font-bold text-white hover:bg-emerald-500 cursor-pointer shadow-md min-h-[40px]"
                     >
                       <Plus className="h-4 w-4" />
                       <span>Add Page ({capturedPages.length + 1})</span>
@@ -585,12 +770,12 @@ export function DocumentUploadClient() {
             ) : (
               /* Live Camera Stream View */
               <div className="space-y-4">
-                <div className="relative overflow-hidden rounded-2xl border border-white/15 bg-zinc-950 min-h-[320px] flex items-center justify-center">
+                <div className="relative overflow-hidden rounded-2xl border border-white/15 bg-zinc-950 min-h-[280px] sm:min-h-[340px] flex items-center justify-center">
                   <video
                     ref={videoRef}
                     autoPlay
                     playsInline
-                    className="w-full max-h-[380px] object-cover"
+                    className="w-full max-h-[360px] object-cover"
                   />
                   <div className="absolute inset-0 pointer-events-none border-2 border-dashed border-emerald-500/40 rounded-2xl margin-4" />
                 </div>
@@ -635,7 +820,7 @@ export function DocumentUploadClient() {
                     type="button"
                     onClick={capturePhoto}
                     disabled={isCapturing}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 text-xs font-bold text-white shadow-lg shadow-blue-600/25 hover:bg-blue-500 cursor-pointer"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 text-xs font-bold text-white shadow-lg shadow-blue-600/25 hover:bg-blue-500 cursor-pointer min-h-[40px]"
                   >
                     <Camera className="h-4 w-4" />
                     <span>Snap Photo</span>
@@ -645,7 +830,7 @@ export function DocumentUploadClient() {
                     <button
                       type="button"
                       onClick={compilePagesToPDF}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-6 text-xs font-bold text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-500 cursor-pointer"
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-6 text-xs font-bold text-white shadow-lg shadow-emerald-600/25 hover:bg-emerald-500 cursor-pointer min-h-[40px]"
                     >
                       <Sparkles className="h-4 w-4" />
                       <span>Finish & Save PDF ({capturedPages.length} Pages)</span>

@@ -109,7 +109,7 @@ export function LogDetailModal({ log, onClose }: LogDetailModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-md">
-      <div className="w-full max-w-lg space-y-6 rounded-3xl border border-white/15 bg-zinc-900/95 p-6 shadow-2xl backdrop-blur-2xl text-left">
+      <div className="w-full max-w-lg space-y-6 rounded-3xl border border-white/15 bg-zinc-900/95 p-5 sm:p-6 shadow-2xl backdrop-blur-2xl text-left max-h-[90vh] overflow-y-auto custom-scrollbar">
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
           <div className="flex items-center gap-3">
