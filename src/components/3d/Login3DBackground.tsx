@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Points, PointMaterial, Float } from '@react-three/drei';
 import * as THREE from 'three';
+import { ThreeErrorBoundary } from './3DErrorBoundary';
 
 interface Login3DBackgroundProps {
   primaryColor?: string;
@@ -26,7 +27,7 @@ function WaveMesh({
   const color2 = useMemo(() => new THREE.Color(secondaryHex), [secondaryHex]);
 
   const geometry = useMemo(() => {
-    return new THREE.PlaneGeometry(35, 25, 45, 45);
+    return new THREE.PlaneGeometry(35, 25, 40, 40);
   }, []);
 
   const pos = geometry.attributes.position;
@@ -80,7 +81,7 @@ function ParticleField({
   const ref = useRef<THREE.Points>(null);
 
   const [positions, colors] = useMemo(() => {
-    const count = 250;
+    const count = 220;
     const posArr = new Float32Array(count * 3);
     const colArr = new Float32Array(count * 3);
 
@@ -131,7 +132,6 @@ export function Login3DBackground({
   primaryColor,
   secondaryColor,
   backgroundColor = '#09090b',
-  themePreset = 'aurora',
 }: Login3DBackgroundProps) {
   const [hasWebGL, setHasWebGL] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
@@ -144,8 +144,12 @@ export function Login3DBackground({
     if (typeof window === 'undefined') return;
 
     const rootStyle = window.getComputedStyle(document.documentElement);
-    const primaryCss = rootStyle.getPropertyValue('--primary-color').trim() || rootStyle.getPropertyValue('--color-primary').trim();
-    const secondaryCss = rootStyle.getPropertyValue('--secondary-color').trim() || rootStyle.getPropertyValue('--color-secondary').trim();
+    const primaryCss =
+      rootStyle.getPropertyValue('--primary-color').trim() ||
+      rootStyle.getPropertyValue('--color-primary').trim();
+    const secondaryCss =
+      rootStyle.getPropertyValue('--secondary-color').trim() ||
+      rootStyle.getPropertyValue('--color-secondary').trim();
 
     if (!primaryColor && primaryCss) setComputedPrimary(primaryCss);
     else if (primaryColor) setComputedPrimary(primaryColor);
@@ -166,7 +170,7 @@ export function Login3DBackground({
     }
   }, []);
 
-  // Mobile viewport detection
+  // Mobile viewport detection (fallback to static CSS gradient on mobile viewports)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const mediaQuery = window.matchMedia('(max-width: 768px)');
@@ -200,19 +204,25 @@ export function Login3DBackground({
   }
 
   return (
-    <div className="fixed inset-0 -z-10 pointer-events-none w-full h-full overflow-hidden opacity-75 transition-opacity duration-700">
-      <Canvas
-        camera={{ position: [0, 0, 15], fov: 60 }}
-        frameloop={isTabVisible ? 'always' : 'never'}
-        gl={{ powerPreference: 'high-performance', alpha: true, antialias: true }}
-      >
-        <ambientLight intensity={0.5} />
-        <pointLight position={[10, 10, 10]} intensity={1} color={computedPrimary} />
-        <pointLight position={[-10, -10, -10]} intensity={0.8} color={computedSecondary} />
+    <ThreeErrorBoundary
+      primaryColor={computedPrimary}
+      secondaryColor={computedSecondary}
+      backgroundColor={backgroundColor}
+    >
+      <div className="fixed inset-0 -z-10 pointer-events-none w-full h-full overflow-hidden opacity-75 transition-opacity duration-700">
+        <Canvas
+          camera={{ position: [0, 0, 15], fov: 60 }}
+          frameloop={isTabVisible ? 'always' : 'never'}
+          gl={{ powerPreference: 'high-performance', alpha: true, antialias: true }}
+        >
+          <ambientLight intensity={0.5} />
+          <pointLight position={[10, 10, 10]} intensity={1} color={computedPrimary} />
+          <pointLight position={[-10, -10, -10]} intensity={0.8} color={computedSecondary} />
 
-        <WaveMesh primaryHex={computedPrimary} secondaryHex={computedSecondary} />
-        <ParticleField primaryHex={computedPrimary} secondaryHex={computedSecondary} />
-      </Canvas>
-    </div>
+          <WaveMesh primaryHex={computedPrimary} secondaryHex={computedSecondary} />
+          <ParticleField primaryHex={computedPrimary} secondaryHex={computedSecondary} />
+        </Canvas>
+      </div>
+    </ThreeErrorBoundary>
   );
 }
