@@ -1,5 +1,5 @@
 // DocVault PWA Service Worker Foundation
-const CACHE_NAME = 'docvault-app-shell-v2-muc7l8po';
+const CACHE_NAME = 'docvault-app-shell-v2-muc8bju8';
 
 const APP_SHELL_ASSETS = [
   '/',
