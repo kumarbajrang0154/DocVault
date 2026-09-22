@@ -36,6 +36,18 @@ model User {
   documents    Document[]
   userSettings UserSettings?
   activityLogs ActivityLog[]
+  siteConfigs  SiteConfig[]  @relation("SiteConfigUpdatedBy")
+}
+
+model SiteConfig {
+  id          String   @id @default("singleton")
+  branding    Json
+  theme       Json
+  content     Json
+  loginLayout Json
+  updatedBy   String?
+  updatedByUser User?  @relation("SiteConfigUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  updatedAt   DateTime @updatedAt
 }
 
 model SiteBranding {

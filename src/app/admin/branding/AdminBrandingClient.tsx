@@ -12,58 +12,62 @@ import {
   Shield,
   Lock,
   Eye,
+  Sparkles,
+  RotateCcw,
+  Layout,
+  Type,
+  Maximize2,
+  Smartphone,
+  Monitor,
 } from 'lucide-react';
 import {
-  getSiteBrandingAction,
-  updateSiteBrandingAction,
-  uploadLogoAction,
-} from '@/app/actions/branding';
+  getSiteConfigAction,
+  updateSiteConfigAction,
+  revertSiteConfigAction,
+} from '@/app/actions/siteConfig';
+import { SiteConfigData, DEFAULT_SITE_CONFIG } from '@/lib/siteConfigTypes';
+import { uploadLogoAction } from '@/app/actions/branding';
+import { Login3DBackground } from '@/components/3d/Login3DBackground';
 
 export function AdminBrandingClient() {
-  const [siteName, setSiteName] = useState('DocVault');
-  const [tagline, setTagline] = useState('Secure Personal Document Vault');
-  const [logoUrl, setLogoUrl] = useState('');
-  const [faviconEmoji, setFaviconEmoji] = useState('🔒');
-  const [primaryColor, setPrimaryColor] = useState('#6366f1');
-  const [secondaryColor, setSecondaryColor] = useState('#8b5cf6');
-  const [backgroundColor, setBackgroundColor] = useState('#09090b');
-  const [accentColor, setAccentColor] = useState('#22d3ee');
-  const [welcomeMessage, setWelcomeMessage] = useState('Secure personal document manager with server-side encryption.');
-  const [footerText, setFooterText] = useState('DocVault Personal Vault • End-to-End Encrypted');
+  const [config, setConfig] = useState<SiteConfigData>(DEFAULT_SITE_CONFIG);
+  const [activeTab, setActiveTab] = useState<'branding' | 'theme' | 'content' | 'layout' | 'ai'>('branding');
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isReverting, setIsReverting] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+
+  // AI Assist State
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [aiProposal, setAiProposal] = useState<Partial<SiteConfigData> | null>(null);
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadBranding() {
+    async function loadConfig() {
       try {
-        const branding = await getSiteBrandingAction();
-        if (branding) {
-          setSiteName(branding.siteName);
-          setTagline(branding.tagline || '');
-          setLogoUrl(branding.logoUrl || '');
-          setFaviconEmoji(branding.faviconEmoji || '🔒');
-          setPrimaryColor(branding.primaryColor || '#6366f1');
-          setSecondaryColor(branding.secondaryColor || '#8b5cf6');
-          setBackgroundColor(branding.backgroundColor || '#09090b');
-          setAccentColor(branding.accentColor || '#22d3ee');
-          setWelcomeMessage(branding.welcomeMessage || '');
-          setFooterText(branding.footerText || '');
+        const data = await getSiteConfigAction();
+        if (data) {
+          setConfig(data);
         }
       } catch (err: unknown) {
-        console.error('Failed to load site branding:', err);
-        setErrorMessage('Failed to load site branding.');
+        console.error('Failed to load site config:', err);
+        setErrorMessage('Failed to load site configuration.');
       } finally {
         setIsLoading(false);
       }
     }
-    loadBranding();
+    loadConfig();
   }, []);
 
-  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    field: 'logoUrl' | 'faviconUrl' | 'loginPageLogoUrl'
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -76,56 +80,132 @@ export function AdminBrandingClient() {
       const res = await uploadLogoAction(formData);
 
       if (res.success && res.logoUrl) {
-        setLogoUrl(res.logoUrl);
-        setSuccessMessage('Logo image uploaded successfully to Cloudinary.');
+        setConfig((prev) => ({
+          ...prev,
+          branding: {
+            ...prev.branding,
+            [field]: res.logoUrl,
+          },
+        }));
+        setSuccessMessage(`Image asset uploaded successfully to Cloudinary.`);
       } else {
-        setErrorMessage(res.error || 'Logo upload failed.');
+        setErrorMessage(res.error || 'Upload failed.');
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Logo upload failed.';
+      const msg = err instanceof Error ? err.message : 'Upload failed.';
       setErrorMessage(msg);
     } finally {
       setIsUploadingLogo(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!siteName.trim()) {
-      setErrorMessage('Site Name is required.');
-      return;
-    }
-
+  const handleSave = async () => {
     setIsSaving(true);
     setErrorMessage(null);
     setSuccessMessage(null);
 
     try {
-      const res = await updateSiteBrandingAction({
-        siteName,
-        tagline,
-        logoUrl,
-        faviconEmoji,
-        primaryColor,
-        secondaryColor,
-        backgroundColor,
-        accentColor,
-        welcomeMessage,
-        footerText,
+      const res = await updateSiteConfigAction({
+        branding: config.branding,
+        theme: config.theme,
+        content: config.content,
+        loginLayout: config.loginLayout,
       });
 
-      if (res.success) {
-        setSuccessMessage('Site branding and design portal settings saved globally!');
+      if (res.success && res.config) {
+        setConfig(res.config);
+        setSuccessMessage('Site configuration and theme settings saved & published globally!');
       } else {
-        setErrorMessage(res.error || 'Failed to save branding.');
+        setErrorMessage(res.error || 'Failed to save configuration.');
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error saving branding.';
+      const msg = err instanceof Error ? err.message : 'Error saving configuration.';
       setErrorMessage(msg);
     } finally {
       setIsSaving(false);
     }
   };
+
+  const handleRevert = async () => {
+    if (!confirm('Are you sure you want to revert to the previous site configuration?')) {
+      return;
+    }
+
+    setIsReverting(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const res = await revertSiteConfigAction();
+      if (res.success && res.config) {
+        setConfig(res.config);
+        setSuccessMessage('Successfully reverted to previous site configuration.');
+      } else {
+        setErrorMessage(res.error || 'Failed to revert configuration.');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error reverting configuration.';
+      setErrorMessage(msg);
+    } finally {
+      setIsReverting(false);
+    }
+  };
+
+  const handleGenerateAiTheme = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiPrompt.trim()) return;
+
+    setIsGeneratingAi(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const res = await fetch('/api/admin/ai-assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: aiPrompt,
+          currentConfig: config,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.proposal) {
+        setAiProposal(data.proposal);
+        setSuccessMessage('AI theme proposal generated! Preview the proposed theme on the right.');
+      } else {
+        setErrorMessage(data.error || 'AI generation failed.');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'AI assist request failed.';
+      setErrorMessage(msg);
+    } finally {
+      setIsGeneratingAi(false);
+    }
+  };
+
+  const handleApplyAiProposal = () => {
+    if (!aiProposal) return;
+    setConfig((prev) => ({
+      ...prev,
+      branding: { ...prev.branding, ...aiProposal.branding },
+      theme: { ...prev.theme, ...aiProposal.theme },
+      content: { ...prev.content, ...aiProposal.content },
+      loginLayout: { ...prev.loginLayout, ...aiProposal.loginLayout },
+    }));
+    setAiProposal(null);
+    setSuccessMessage('AI proposed theme applied to editor! Click "Save & Publish Globally" to make it live.');
+  };
+
+  const activeDisplayConfig = aiProposal
+    ? {
+        ...config,
+        branding: { ...config.branding, ...aiProposal.branding },
+        theme: { ...config.theme, ...aiProposal.theme },
+        content: { ...config.content, ...aiProposal.content },
+        loginLayout: { ...config.loginLayout, ...aiProposal.loginLayout },
+      }
+    : config;
 
   if (isLoading) {
     return (
@@ -136,7 +216,7 @@ export function AdminBrandingClient() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 p-4 sm:p-6 lg:p-8">
+    <div className="max-w-[1700px] mx-auto space-y-6 p-4 sm:p-6 lg:p-8">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-6">
         <div className="flex items-center gap-3">
@@ -149,32 +229,48 @@ export function AdminBrandingClient() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2.5">
               <Palette className="h-7 w-7 text-indigo-400" />
-              Site Branding & Design Portal
+              Site Control & AI Theme Portal
             </h1>
             <p className="text-sm text-zinc-400 mt-1">
-              Customize DocVault&apos;s global visual theme, colors, logos, and copy in real-time.
+              Customize visual identity, 3D WebGL background, copy, and AI theming in real-time.
             </p>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={isSaving}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-6 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 hover:bg-indigo-500 disabled:opacity-50 cursor-pointer"
-        >
-          {isSaving ? (
-            <>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleRevert}
+            disabled={isReverting}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-xs font-bold text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-50 cursor-pointer"
+          >
+            {isReverting ? (
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Saving Theme...</span>
-            </>
-          ) : (
-            <>
-              <CheckCircle2 className="h-4 w-4" />
-              <span>Save & Apply Globally</span>
-            </>
-          )}
-        </button>
+            ) : (
+              <RotateCcw className="h-4 w-4 text-amber-400" />
+            )}
+            <span>Revert to Previous</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-6 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 hover:bg-indigo-500 disabled:opacity-50 cursor-pointer"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Publishing...</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Save & Publish Globally</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {errorMessage && (
@@ -191,302 +287,747 @@ export function AdminBrandingClient() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left Column: Branding Form Controls */}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="rounded-3xl border border-white/10 bg-zinc-900/60 p-6 sm:p-8 shadow-xl space-y-6">
-            <h2 className="text-base font-bold text-white border-b border-white/5 pb-3">
-              1. Brand Identity & Copy
-            </h2>
+      {/* AI Proposal Banner if active */}
+      {aiProposal && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-3xl border border-indigo-500/30 bg-indigo-950/40 p-5 shadow-2xl backdrop-blur-xl">
+          <div className="flex items-center gap-3">
+            <Sparkles className="h-6 w-6 text-indigo-400 shrink-0" />
+            <div>
+              <h3 className="text-sm font-bold text-white">AI Theme Proposal Active</h3>
+              <p className="text-xs text-indigo-200/70 mt-0.5">
+                Review the live preview on the right. Apply changes to populate controls or discard.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setAiProposal(null)}
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-zinc-300 hover:bg-white/10"
+            >
+              Discard Proposal
+            </button>
+            <button
+              type="button"
+              onClick={handleApplyAiProposal}
+              className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-indigo-500"
+            >
+              Apply Proposed Theme
+            </button>
+          </div>
+        </div>
+      )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* Split Screen Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Left Column: Control Panel (5 cols) */}
+        <div className="lg:col-span-5 space-y-6">
+          {/* Navigation Tabs */}
+          <div className="flex items-center gap-1 rounded-2xl border border-white/10 bg-zinc-900/80 p-1.5 overflow-x-auto custom-scrollbar">
+            <button
+              type="button"
+              onClick={() => setActiveTab('branding')}
+              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'branding'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Shield className="h-3.5 w-3.5" />
+              <span>Branding</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('theme')}
+              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'theme'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Palette className="h-3.5 w-3.5" />
+              <span>Theme</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('content')}
+              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'content'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Type className="h-3.5 w-3.5" />
+              <span>Content</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('layout')}
+              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'layout'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Layout className="h-3.5 w-3.5" />
+              <span>3D & Layout</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('ai')}
+              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'ai'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+              <span>AI Assist</span>
+            </button>
+          </div>
+
+          {/* TAB 1: BRANDING */}
+          {activeTab === 'branding' && (
+            <div className="rounded-3xl border border-white/10 bg-zinc-900/60 p-6 shadow-xl space-y-5">
+              <h2 className="text-sm font-bold text-white border-b border-white/5 pb-3">
+                Brand Identity & Logos
+              </h2>
+
               <div>
                 <label className="block text-xs font-bold text-zinc-300 uppercase mb-1">
-                  Site Name <span className="text-rose-400">*</span>
+                  Site Name
                 </label>
                 <input
                   type="text"
-                  value={siteName}
-                  onChange={(e) => setSiteName(e.target.value)}
-                  required
-                  placeholder="DocVault"
+                  value={config.branding.siteName}
+                  onChange={(e) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      branding: { ...prev.branding, siteName: e.target.value },
+                    }))
+                  }
                   className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
                 />
               </div>
 
+              {/* Header Logo */}
               <div>
                 <label className="block text-xs font-bold text-zinc-300 uppercase mb-1">
-                  Favicon Emoji
+                  Main Header Logo Image
                 </label>
-                <input
-                  type="text"
-                  value={faviconEmoji}
-                  onChange={(e) => setFaviconEmoji(e.target.value)}
-                  placeholder="🔒"
-                  className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
-                />
+                <div className="flex items-center gap-3">
+                  <label className="flex h-9 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-semibold text-zinc-300 hover:bg-white/10 cursor-pointer">
+                    <Upload className="h-3.5 w-3.5" />
+                    <span>{isUploadingLogo ? 'Uploading...' : 'Upload Header Logo'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleLogoUpload(e, 'logoUrl')}
+                      className="hidden"
+                    />
+                  </label>
+                  {config.branding.logoUrl && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          branding: { ...prev.branding, logoUrl: null },
+                        }))
+                      }
+                      className="text-xs text-rose-400 hover:underline"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-xs font-bold text-zinc-300 uppercase mb-1">
-                Tagline / Subheading
-              </label>
-              <input
-                type="text"
-                value={tagline}
-                onChange={(e) => setTagline(e.target.value)}
-                placeholder="Secure Personal Document Vault"
-                className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
-              />
-            </div>
+              {/* Login Page Logo */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 uppercase mb-1">
+                  Login Page Dedicated Logo (Optional)
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex h-9 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-semibold text-zinc-300 hover:bg-white/10 cursor-pointer">
+                    <Upload className="h-3.5 w-3.5" />
+                    <span>Upload Login Logo</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleLogoUpload(e, 'loginPageLogoUrl')}
+                      className="hidden"
+                    />
+                  </label>
+                  {config.branding.loginPageLogoUrl && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          branding: { ...prev.branding, loginPageLogoUrl: null },
+                        }))
+                      }
+                      className="text-xs text-rose-400 hover:underline"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
 
-            <div>
-              <label className="block text-xs font-bold text-zinc-300 uppercase mb-1">
-                Custom Logo Upload (Optional)
-              </label>
-              <div className="flex items-center gap-3">
-                <label className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-semibold text-zinc-300 hover:bg-white/10 cursor-pointer">
-                  <Upload className="h-4 w-4" />
-                  <span>{isUploadingLogo ? 'Uploading...' : 'Choose Logo Image'}</span>
+              {/* Favicon URL */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 uppercase mb-1">
+                  Favicon Image URL
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex h-9 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-semibold text-zinc-300 hover:bg-white/10 cursor-pointer">
+                    <Upload className="h-3.5 w-3.5" />
+                    <span>Upload Favicon</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleLogoUpload(e, 'faviconUrl')}
+                      className="hidden"
+                    />
+                  </label>
                   <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleLogoChange}
-                    className="hidden"
+                    type="text"
+                    value={config.branding.faviconUrl || ''}
+                    onChange={(e) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        branding: { ...prev.branding, faviconUrl: e.target.value },
+                      }))
+                    }
+                    placeholder="/favicon-v2.svg"
+                    className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-xs text-white"
                   />
-                </label>
-                {logoUrl && (
-                  <button
-                    type="button"
-                    onClick={() => setLogoUrl('')}
-                    className="text-xs text-rose-400 hover:underline"
-                  >
-                    Remove Logo
-                  </button>
-                )}
+                </div>
               </div>
-              {logoUrl && (
-                <div className="mt-2 p-2 rounded-xl border border-white/10 bg-zinc-950 inline-block">
-                  {/* eslint-disable-next-html-element-suppression */}
-                  <img src={logoUrl} alt="Site Logo" className="h-8 w-auto object-contain" />
+            </div>
+          )}
+
+          {/* TAB 2: THEME COLORS & TYPOGRAPHY */}
+          {activeTab === 'theme' && (
+            <div className="rounded-3xl border border-white/10 bg-zinc-900/60 p-6 shadow-xl space-y-5">
+              <h2 className="text-sm font-bold text-white border-b border-white/5 pb-3">
+                Color Palette & Typography
+              </h2>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* Primary Color */}
+                <div>
+                  <label className="block text-[11px] font-bold text-zinc-300 uppercase mb-1">
+                    Primary Color
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={config.theme.primaryColor}
+                      onChange={(e) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          theme: { ...prev.theme, primaryColor: e.target.value },
+                        }))
+                      }
+                      className="h-9 w-12 cursor-pointer rounded-lg border border-white/10 bg-zinc-950 p-1"
+                    />
+                    <input
+                      type="text"
+                      value={config.theme.primaryColor}
+                      onChange={(e) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          theme: { ...prev.theme, primaryColor: e.target.value },
+                        }))
+                      }
+                      className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Secondary Color */}
+                <div>
+                  <label className="block text-[11px] font-bold text-zinc-300 uppercase mb-1">
+                    Secondary Color
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={config.theme.secondaryColor}
+                      onChange={(e) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          theme: { ...prev.theme, secondaryColor: e.target.value },
+                        }))
+                      }
+                      className="h-9 w-12 cursor-pointer rounded-lg border border-white/10 bg-zinc-950 p-1"
+                    />
+                    <input
+                      type="text"
+                      value={config.theme.secondaryColor}
+                      onChange={(e) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          theme: { ...prev.theme, secondaryColor: e.target.value },
+                        }))
+                      }
+                      className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Accent Color */}
+                <div>
+                  <label className="block text-[11px] font-bold text-zinc-300 uppercase mb-1">
+                    Accent Color
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={config.theme.accentColor}
+                      onChange={(e) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          theme: { ...prev.theme, accentColor: e.target.value },
+                        }))
+                      }
+                      className="h-9 w-12 cursor-pointer rounded-lg border border-white/10 bg-zinc-950 p-1"
+                    />
+                    <input
+                      type="text"
+                      value={config.theme.accentColor}
+                      onChange={(e) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          theme: { ...prev.theme, accentColor: e.target.value },
+                        }))
+                      }
+                      className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Background Color */}
+                <div>
+                  <label className="block text-[11px] font-bold text-zinc-300 uppercase mb-1">
+                    Background Color
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={config.theme.backgroundColor}
+                      onChange={(e) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          theme: { ...prev.theme, backgroundColor: e.target.value },
+                        }))
+                      }
+                      className="h-9 w-12 cursor-pointer rounded-lg border border-white/10 bg-zinc-950 p-1"
+                    />
+                    <input
+                      type="text"
+                      value={config.theme.backgroundColor}
+                      onChange={(e) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          theme: { ...prev.theme, backgroundColor: e.target.value },
+                        }))
+                      }
+                      className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Font Family Selector */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 uppercase mb-1">
+                  Typography Font Family
+                </label>
+                <select
+                  value={config.theme.fontFamily}
+                  onChange={(e) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      theme: { ...prev.theme, fontFamily: e.target.value },
+                    }))
+                  }
+                  className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white"
+                >
+                  <option value="Inter">Inter (Clean Modern)</option>
+                  <option value="Geist">Geist (Tech & Minimalist)</option>
+                  <option value="Roboto">Roboto (Google Standard)</option>
+                  <option value="Outfit">Outfit (Geometric)</option>
+                  <option value="Playfair Display">Playfair Display (Serif Elegance)</option>
+                  <option value="Fira Code">Fira Code (Developer Mono)</option>
+                </select>
+              </div>
+
+              {/* Border Radius Slider */}
+              <div>
+                <div className="flex items-center justify-between text-xs font-bold text-zinc-300 uppercase mb-1">
+                  <span>Border Radius</span>
+                  <span className="font-mono text-indigo-400">{config.theme.borderRadius}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="32"
+                  value={parseInt(config.theme.borderRadius || '16', 10)}
+                  onChange={(e) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      theme: { ...prev.theme, borderRadius: `${e.target.value}px` },
+                    }))
+                  }
+                  className="w-full accent-indigo-500 cursor-pointer"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: CONTENT & COPY */}
+          {activeTab === 'content' && (
+            <div className="rounded-3xl border border-white/10 bg-zinc-900/60 p-6 shadow-xl space-y-5">
+              <h2 className="text-sm font-bold text-white border-b border-white/5 pb-3">
+                Content & Micro-Copy
+              </h2>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 uppercase mb-1">
+                  Login Screen Headline
+                </label>
+                <input
+                  type="text"
+                  value={config.content.loginHeadline}
+                  onChange={(e) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      content: { ...prev.content, loginHeadline: e.target.value },
+                    }))
+                  }
+                  className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 uppercase mb-1">
+                  Login Subtext / Description
+                </label>
+                <textarea
+                  value={config.content.loginSubtext}
+                  onChange={(e) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      content: { ...prev.content, loginSubtext: e.target.value },
+                    }))
+                  }
+                  rows={2}
+                  className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 uppercase mb-1">
+                  Sign-In CTA Button Text
+                </label>
+                <input
+                  type="text"
+                  value={config.content.ctaButtonText}
+                  onChange={(e) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      content: { ...prev.content, ctaButtonText: e.target.value },
+                    }))
+                  }
+                  className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 uppercase mb-1">
+                  Footer Rights Text
+                </label>
+                <input
+                  type="text"
+                  value={config.content.footerText}
+                  onChange={(e) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      content: { ...prev.content, footerText: e.target.value },
+                    }))
+                  }
+                  className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: 3D & LOGIN LAYOUT */}
+          {activeTab === 'layout' && (
+            <div className="rounded-3xl border border-white/10 bg-zinc-900/60 p-6 shadow-xl space-y-5">
+              <h2 className="text-sm font-bold text-white border-b border-white/5 pb-3">
+                3D Background & Login Layout
+              </h2>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 uppercase mb-2">
+                  Login Layout Style
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {(['centered', 'split', 'fullBackground'] as const).map((style) => (
+                    <button
+                      key={style}
+                      type="button"
+                      onClick={() =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          loginLayout: { ...prev.loginLayout, style },
+                        }))
+                      }
+                      className={`rounded-2xl border p-3 text-center text-xs font-bold capitalize transition-all cursor-pointer ${
+                        config.loginLayout.style === style
+                          ? 'border-indigo-500 bg-indigo-600/20 text-indigo-300 shadow-md'
+                          : 'border-white/10 bg-zinc-950 text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      {style}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3D Background Toggle */}
+              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-zinc-950 p-4">
+                <div>
+                  <h3 className="text-xs font-bold text-white">Enable 3D WebGL Background</h3>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Animated Three.js WebGL canvas on login page.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={config.loginLayout.show3DBackground}
+                  onChange={(e) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      loginLayout: { ...prev.loginLayout, show3DBackground: e.target.checked },
+                    }))
+                  }
+                  className="h-5 w-5 accent-indigo-500 cursor-pointer"
+                />
+              </div>
+
+              {/* 3D Background Theme Presets */}
+              {config.loginLayout.show3DBackground && (
+                <div>
+                  <label className="block text-xs font-bold text-zinc-300 uppercase mb-2">
+                    3D Visual Effect Theme Preset
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { id: 'aurora', name: 'Aurora Plane Mesh' },
+                      { id: 'particles', name: 'Floating Particles Field' },
+                      { id: 'waves', name: 'Sine Wave Mesh' },
+                      { id: 'cybergrid', name: 'Cyberpunk Grid' },
+                    ].map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            loginLayout: { ...prev.loginLayout, backgroundTheme: preset.id },
+                          }))
+                        }
+                        className={`rounded-2xl border p-3 text-left text-xs font-bold transition-all cursor-pointer ${
+                          config.loginLayout.backgroundTheme === preset.id
+                            ? 'border-indigo-500 bg-indigo-600/20 text-indigo-300'
+                            : 'border-white/10 bg-zinc-950 text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        {preset.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
+          )}
 
-            <div>
-              <label className="block text-xs font-bold text-zinc-300 uppercase mb-1">
-                Welcome Message (Login Screen)
-              </label>
-              <textarea
-                value={welcomeMessage}
-                onChange={(e) => setWelcomeMessage(e.target.value)}
-                rows={2}
-                placeholder="Secure personal document manager..."
-                className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
-              />
+          {/* TAB 5: AI ASSIST CHAT */}
+          {activeTab === 'ai' && (
+            <div className="rounded-3xl border border-indigo-500/30 bg-gradient-to-b from-indigo-950/40 via-zinc-900/60 to-zinc-900/80 p-6 shadow-xl space-y-5">
+              <div className="flex items-center gap-2.5 border-b border-indigo-500/20 pb-3">
+                <Sparkles className="h-5 w-5 text-indigo-400" />
+                <h2 className="text-sm font-bold text-white">AI Natural Language Theme Assistant</h2>
+              </div>
+
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                Describe the visual style or vibe you want (e.g. <i>&quot;Neon Cyberpunk vault with bright cyan accents, dark midnight background, and floating particle grid&quot;</i>).
+              </p>
+
+              <form onSubmit={handleGenerateAiTheme} className="space-y-4">
+                <textarea
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  rows={3}
+                  placeholder="e.g. Modern Minimalist Emerald theme with clean fonts, subtle aurora background wave, and soft rounded corners..."
+                  className="w-full rounded-2xl border border-white/15 bg-zinc-950/80 p-4 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
+                />
+
+                <button
+                  type="submit"
+                  disabled={isGeneratingAi || !aiPrompt.trim()}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 py-3 text-xs font-bold text-white shadow-lg shadow-indigo-600/25 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 cursor-pointer"
+                >
+                  {isGeneratingAi ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Generating Theme with AI...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 text-amber-300" />
+                      <span>Generate Theme Proposal</span>
+                    </>
+                  )}
+                </button>
+              </form>
             </div>
+          )}
+        </div>
 
-            <div>
-              <label className="block text-xs font-bold text-zinc-300 uppercase mb-1">
-                Footer Text
-              </label>
-              <input
-                type="text"
-                value={footerText}
-                onChange={(e) => setFooterText(e.target.value)}
-                placeholder="DocVault Personal Vault • End-to-End Encrypted"
-                className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Color Palette Controls */}
-          <div className="rounded-3xl border border-white/10 bg-zinc-900/60 p-6 sm:p-8 shadow-xl space-y-6">
-            <h2 className="text-base font-bold text-white border-b border-white/5 pb-3">
-              2. Color Palette Customization
-            </h2>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {/* Primary Color */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-zinc-300 uppercase">
-                  Primary Color (Buttons & Highlights)
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    value={primaryColor}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
-                    className="h-10 w-14 cursor-pointer rounded-lg border border-white/10 bg-zinc-950 p-1"
-                  />
-                  <input
-                    type="text"
-                    value={primaryColor}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-xs font-mono text-white"
-                  />
-                </div>
-              </div>
-
-              {/* Secondary Color */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-zinc-300 uppercase">
-                  Secondary Color (Accents & Badges)
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    value={secondaryColor}
-                    onChange={(e) => setSecondaryColor(e.target.value)}
-                    className="h-10 w-14 cursor-pointer rounded-lg border border-white/10 bg-zinc-950 p-1"
-                  />
-                  <input
-                    type="text"
-                    value={secondaryColor}
-                    onChange={(e) => setSecondaryColor(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-xs font-mono text-white"
-                  />
-                </div>
-              </div>
-
-              {/* Background Color */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-zinc-300 uppercase">
-                  Background Color (Global canvas)
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    value={backgroundColor}
-                    onChange={(e) => setBackgroundColor(e.target.value)}
-                    className="h-10 w-14 cursor-pointer rounded-lg border border-white/10 bg-zinc-950 p-1"
-                  />
-                  <input
-                    type="text"
-                    value={backgroundColor}
-                    onChange={(e) => setBackgroundColor(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-xs font-mono text-white"
-                  />
-                </div>
-              </div>
-
-              {/* Accent Color */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-zinc-300 uppercase">
-                  Accent Color (Pills & Special Highlights)
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    value={accentColor}
-                    onChange={(e) => setAccentColor(e.target.value)}
-                    className="h-10 w-14 cursor-pointer rounded-lg border border-white/10 bg-zinc-950 p-1"
-                  />
-                  <input
-                    type="text"
-                    value={accentColor}
-                    onChange={(e) => setAccentColor(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-xs font-mono text-white"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </form>
-
-        {/* Right Column: Live Interactive Preview Panel */}
-        <div className="space-y-6">
+        {/* Right Column: Live Interactive Preview Frame (7 cols) */}
+        <div className="lg:col-span-7 space-y-4 sticky top-24">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <Eye className="h-5 w-5 text-indigo-400" />
-              Live Theme Preview
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <Eye className="h-4 w-4 text-indigo-400" />
+              Real-Time Live Canvas Preview
             </h2>
-            <span className="text-xs text-zinc-500">Real-time dynamic rendering</span>
+            <div className="flex items-center gap-2 border border-white/10 rounded-xl p-1 bg-zinc-900">
+              <button
+                type="button"
+                onClick={() => setPreviewDevice('desktop')}
+                className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+                  previewDevice === 'desktop'
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+                title="Desktop View"
+              >
+                <Monitor className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewDevice('mobile')}
+                className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+                  previewDevice === 'mobile'
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+                title="Mobile View"
+              >
+                <Smartphone className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
 
           <div
-            className="rounded-3xl border border-white/15 p-6 space-y-6 transition-all duration-300 shadow-2xl"
-            style={{ backgroundColor: backgroundColor }}
+            className={`mx-auto overflow-hidden rounded-3xl border border-white/20 transition-all duration-500 shadow-2xl relative min-h-[580px] flex flex-col justify-center items-center p-6 ${
+              previewDevice === 'mobile' ? 'max-w-sm' : 'w-full'
+            }`}
+            style={{
+              backgroundColor: activeDisplayConfig.theme.backgroundColor || '#09090b',
+            }}
           >
-            {/* Mock Header Component Preview */}
-            <div className="rounded-2xl border border-white/10 p-4 bg-zinc-950/80 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {logoUrl ? (
+            {/* 3D Background Render in Preview */}
+            {activeDisplayConfig.loginLayout.show3DBackground && (
+              <Login3DBackground
+                themePreset={activeDisplayConfig.loginLayout.backgroundTheme}
+                primaryColor={activeDisplayConfig.theme.primaryColor}
+                secondaryColor={activeDisplayConfig.theme.secondaryColor}
+                accentColor={activeDisplayConfig.theme.accentColor}
+                backgroundColor={activeDisplayConfig.theme.backgroundColor}
+              />
+            )}
+
+            {/* PREVIEW CONTAINER */}
+            <div
+              className="w-full max-w-md overflow-hidden border border-white/15 p-8 text-center shadow-2xl backdrop-blur-2xl space-y-5"
+              style={{
+                borderRadius: activeDisplayConfig.theme.borderRadius || '24px',
+                backgroundColor: 'rgba(18, 18, 24, 0.85)',
+              }}
+            >
+              {/* Preview Logo */}
+              <div className="flex justify-center">
+                {activeDisplayConfig.branding.loginPageLogoUrl || activeDisplayConfig.branding.logoUrl ? (
                   // eslint-disable-next-html-element-suppression
-                  <img src={logoUrl} alt="Preview Logo" className="h-7 w-auto object-contain" />
+                  <img
+                    src={
+                      activeDisplayConfig.branding.loginPageLogoUrl ||
+                      activeDisplayConfig.branding.logoUrl ||
+                      ''
+                    }
+                    alt="Preview"
+                    className="h-12 w-auto object-contain"
+                  />
                 ) : (
                   <div
-                    className="flex h-8 w-8 items-center justify-center rounded-xl p-0.5"
-                    style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
+                    className="flex h-14 w-14 items-center justify-center rounded-2xl p-0.5 shadow-lg"
+                    style={{
+                      background: `linear-gradient(135deg, ${activeDisplayConfig.theme.primaryColor}, ${activeDisplayConfig.theme.secondaryColor})`,
+                    }}
                   >
-                    <div className="flex h-full w-full items-center justify-center rounded-[10px] bg-zinc-950">
-                      <Shield className="h-4 w-4" style={{ color: accentColor }} />
+                    <div className="flex h-full w-full items-center justify-center rounded-[14px] bg-zinc-950">
+                      <Shield
+                        className="h-7 w-7"
+                        style={{ color: activeDisplayConfig.theme.accentColor }}
+                      />
                     </div>
                   </div>
                 )}
-                <span className="text-sm font-extrabold text-white flex items-center gap-1.5">
-                  {siteName || 'DocVault'}
-                  <span
-                    className="rounded-full px-2 py-0.2 text-[9px] font-bold"
-                    style={{
-                      backgroundColor: `${primaryColor}20`,
-                      borderColor: `${primaryColor}40`,
-                      color: primaryColor,
-                    }}
-                  >
-                    Vault
-                  </span>
-                </span>
-              </div>
-
-              <button
-                type="button"
-                className="h-8 rounded-xl px-3 text-xs font-bold text-white transition-transform cursor-pointer"
-                style={{ backgroundColor: primaryColor }}
-              >
-                Upload File
-              </button>
-            </div>
-
-            {/* Mock Login Screen Preview */}
-            <div className="rounded-2xl border border-white/10 bg-zinc-900/90 p-6 text-center space-y-4 shadow-xl">
-              <div
-                className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl p-0.5 shadow-lg"
-                style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
-              >
-                <div className="flex h-full w-full items-center justify-center rounded-[12px] bg-zinc-950">
-                  <Shield className="h-6 w-6" style={{ color: accentColor }} />
-                </div>
               </div>
 
               <div
-                className="inline-flex items-center gap-1 rounded-full px-3 py-0.5 text-[10px] font-semibold"
-                style={{ backgroundColor: `${secondaryColor}20`, color: secondaryColor }}
+                className="inline-flex items-center gap-1.5 rounded-full border px-3 py-0.5 text-[10px] font-bold"
+                style={{
+                  backgroundColor: `${activeDisplayConfig.theme.primaryColor}20`,
+                  borderColor: `${activeDisplayConfig.theme.primaryColor}40`,
+                  color: activeDisplayConfig.theme.primaryColor,
+                }}
               >
                 <Lock className="h-3 w-3" />
-                <span>Protected Vault</span>
+                <span>Encrypted Personal Vault</span>
               </div>
 
               <div>
-                <h3 className="text-lg font-bold text-white">{siteName}</h3>
+                <h3 className="text-xl font-extrabold text-white">
+                  {activeDisplayConfig.content.loginHeadline}
+                </h3>
                 <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
-                  {welcomeMessage || tagline}
+                  {activeDisplayConfig.content.loginSubtext}
                 </p>
               </div>
 
               <button
                 type="button"
-                className="w-full rounded-full border border-white/15 py-2.5 text-xs font-bold text-white shadow-md cursor-pointer"
-                style={{ backgroundColor: primaryColor }}
+                className="w-full py-3 text-xs font-bold text-white shadow-lg cursor-pointer"
+                style={{
+                  backgroundColor: activeDisplayConfig.theme.primaryColor,
+                  borderRadius: activeDisplayConfig.theme.borderRadius || '9999px',
+                }}
               >
-                Sign in with Google
+                {activeDisplayConfig.content.ctaButtonText || 'Sign in with Google'}
               </button>
-            </div>
 
-            {/* Mock Footer */}
-            <div className="text-center text-[11px] text-zinc-500 pt-2 border-t border-white/5">
-              {footerText || `${siteName} Personal Vault`}
+              <p className="text-[10px] text-zinc-500 pt-2 border-t border-white/5">
+                {activeDisplayConfig.content.footerText}
+              </p>
             </div>
           </div>
         </div>

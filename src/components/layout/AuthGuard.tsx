@@ -5,13 +5,14 @@ import { RequestPendingView } from './RequestPendingView';
 import { RequestRejectedView } from './RequestRejectedView';
 import { RequestSuspendedView } from './RequestSuspendedView';
 import { AppLayout } from './AppLayout';
-import { getSiteBrandingAction } from '@/app/actions/branding';
+import { getSiteConfigAction } from '@/app/actions/siteConfig';
 
 export async function AuthGuard({ children }: { children: React.ReactNode }) {
   const session = await auth();
+  const config = await getSiteConfigAction();
 
   if (!session?.user) {
-    return <DocVaultLoginView />;
+    return <DocVaultLoginView config={config} />;
   }
 
   // Admins cannot be suspended
@@ -27,7 +28,16 @@ export async function AuthGuard({ children }: { children: React.ReactNode }) {
     return <RequestRejectedView userEmail={session.user.email} />;
   }
 
-  const branding = await getSiteBrandingAction();
+  const legacyBranding = {
+    siteName: config.branding.siteName,
+    logoUrl: config.branding.logoUrl,
+    primaryColor: config.theme.primaryColor,
+    secondaryColor: config.theme.secondaryColor,
+    backgroundColor: config.theme.backgroundColor,
+    accentColor: config.theme.accentColor,
+    welcomeMessage: config.content.loginSubtext,
+    footerText: config.content.footerText,
+  };
 
-  return <AppLayout session={session} branding={branding}>{children}</AppLayout>;
+  return <AppLayout session={session} branding={legacyBranding}>{children}</AppLayout>;
 }
