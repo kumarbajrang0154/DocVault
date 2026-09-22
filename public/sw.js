@@ -1,11 +1,14 @@
-// Mood PWA Service Worker Foundation
-const CACHE_NAME = 'mood-app-shell-mubgtmuh';
+// DocVault PWA Service Worker Foundation
+const CACHE_NAME = 'docvault-app-shell-v2-muc6vrm4';
 
 const APP_SHELL_ASSETS = [
   '/',
   '/manifest.json',
-  '/icon.svg',
-  '/favicon.svg'
+  '/icon-v2.svg',
+  '/icon-192-v2.svg',
+  '/icon-512-v2.svg',
+  '/apple-icon-v2.svg',
+  '/favicon-v2.svg'
 ];
 
 self.addEventListener('install', (event) => {

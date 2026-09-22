@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const swPath = path.join(process.cwd(), 'public', 'sw.js');
 const buildHash = process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || Date.now().toString(36);
-const cacheName = `mood-app-shell-${buildHash}`;
+const cacheName = `docvault-app-shell-v2-${buildHash}`;
 
 if (fs.existsSync(swPath)) {
   let content = fs.readFileSync(swPath, 'utf8');
